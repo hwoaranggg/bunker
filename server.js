@@ -1,16 +1,25 @@
 import express from 'express';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { PlayerStore } from './playerStore.js';
 import {
   acknowledgeReturn,
   equipItem,
+  importExternalSignals,
   moveHero,
   publicGameState,
+  resolveIncident,
+  resolveExternalSignal,
   resolveSignal,
+  startIncident,
   startConstruction,
-  startObjectAction
+  startObjectAction,
+  updateAppearance,
+  updateCosmetics
 } from './gameEngine.js';
+import { PRODUCT_CATALOG, catalogView, createStarsInvoiceLink, tonPaymentRequest, validateProduct, verifyTonTransaction } from './commerce.js';
+import { XRadarClient } from './xradarClient.js';
 import { createSessionToken, validateTelegramInitData, verifySessionToken } from './telegramAuth.js';
 import { FixedWindowRateLimiter, rateLimitMiddleware } from './rateLimiter.js';
 
@@ -26,13 +35,19 @@ export function getConfig(env = process.env) {
     sessionSecret: env.SESSION_SECRET || (env.NODE_ENV === 'production' ? '' : 'local-development-secret-change-me'),
     allowDevAuth: env.ALLOW_DEV_AUTH === 'true' && env.NODE_ENV !== 'production',
     timeScale: Math.max(0.001, Number(env.GAME_TIME_SCALE || 1)),
-    xradarBaseUrl: env.XRADAR_BASE_URL || ''
+    xradarBaseUrl: env.XRADAR_BASE_URL || '',
+    xradarGameApiKey: env.XRADAR_GAME_API_KEY || '',
+    telegramWebhookSecret: env.TELEGRAM_WEBHOOK_SECRET || '',
+    tonWalletAddress: env.TON_WALLET_ADDRESS || '',
+    tonApiBaseUrl: env.TON_API_BASE_URL || '',
+    tonApiKey: env.TON_API_KEY || ''
   };
 }
 
 export function createApp({ store, config = getConfig() }) {
   if (!config.sessionSecret) throw new Error('SESSION_SECRET is required in production.');
   const app = express();
+  const xradar = new XRadarClient({ baseUrl: config.xradarBaseUrl, apiKey: config.xradarGameApiKey });
   app.disable('x-powered-by');
   app.use(express.json({ limit: '16kb' }));
   app.use((req, res, next) => {
@@ -41,10 +56,10 @@ export function createApp({ store, config = getConfig() }) {
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     res.setHeader('Content-Security-Policy', [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://telegram.org",
+      "script-src 'self' 'unsafe-inline' https://telegram.org https://unpkg.com",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data:",
-      "connect-src 'self'",
+      "img-src 'self' data: https:",
+      "connect-src 'self' https://bridge.tonapi.io https://*.tonconnect.org",
       'frame-ancestors https://web.telegram.org https://*.telegram.org'
     ].join('; '));
     next();
@@ -72,13 +87,24 @@ export function createApp({ store, config = getConfig() }) {
     } catch {
       database = 'unavailable';
     }
-    const xradar = await checkXradar(config.xradarBaseUrl);
+    const xradarStatus = await xradar.health();
     const ok = database === 'ok';
-    res.status(ok ? 200 : 503).json({ ok, database, xradar, game: 'v3-bunker-lab' });
+    res.status(ok ? 200 : 503).json({ ok, database, xradar: xradarStatus, game: 'v1.0-schema5-xradar-lab' });
   }));
 
   app.get('/api/config', (_req, res) => {
-    res.json({ allowDevAuth: config.allowDevAuth, telegramConfigured: Boolean(config.botToken) });
+    res.json({
+      allowDevAuth: config.allowDevAuth,
+      telegramConfigured: Boolean(config.botToken),
+      xradarBaseUrl: config.xradarBaseUrl || null,
+      liveWaves: xradar.configured,
+      commerce: { stars: Boolean(config.botToken), ton: Boolean(config.tonWalletAddress && config.tonApiBaseUrl) }
+    });
+  });
+
+  app.get('/tonconnect-manifest.json', (req, res) => {
+    const origin = `${req.protocol}://${req.get('host')}`;
+    res.json({ url: origin, name: 'XRadar Lab', iconUrl: `${origin}/assets/command-lab-concept.png` });
   });
 
   app.post('/api/auth/telegram', asyncRoute(async (req, res) => {
@@ -86,17 +112,26 @@ export function createApp({ store, config = getConfig() }) {
     if (req.body?.initData) {
       user = validateTelegramInitData(req.body.initData, config.botToken);
     } else if (config.allowDevAuth && req.body?.dev === true) {
-      user = { id: '900000001', first_name: 'Демо-оператор', username: 'local_demo' };
+      user = { id: '900000001', first_name: 'Demo Operator', username: 'local_demo' };
     } else {
       const error = new Error('Запуск вне Telegram запрещён.');
       error.status = 401;
       error.code = 'TELEGRAM_REQUIRED';
       throw error;
     }
-    const player = await store.findOrCreateUser(user);
+    let player = await store.findOrCreateUser(user);
+    let referralError = null;
+    const deviceHash = hashDeviceId(req.body?.deviceId, config.sessionSecret);
+    if (req.body?.referralCode || deviceHash) {
+      try {
+        player = await store.registerReferral({ telegramId: player.telegramId, referralCode: req.body?.referralCode, deviceHash });
+      } catch (error) {
+        referralError = error.code || 'REFERRAL_REJECTED';
+      }
+    }
     const token = createSessionToken({ telegramId: player.telegramId }, config.sessionSecret);
     res.setHeader('Set-Cookie', sessionCookie(token, config.nodeEnv === 'production'));
-    res.json({ ok: true, profile: player.profile });
+    res.json({ ok: true, profile: player.profile, referralError });
   }));
 
   app.post('/api/auth/logout', (_req, res) => {
@@ -104,10 +139,91 @@ export function createApp({ store, config = getConfig() }) {
     res.json({ ok: true });
   });
 
+  app.post('/api/telegram/webhook', asyncRoute(async (req, res) => {
+    if (config.telegramWebhookSecret && req.get('X-Telegram-Bot-Api-Secret-Token') !== config.telegramWebhookSecret) {
+      return res.status(403).json({ ok: false });
+    }
+    const query = req.body?.pre_checkout_query;
+    if (query) {
+      const order = await store.getOrder(query.invoice_payload);
+      const valid = Boolean(order
+        && order.status === 'pending'
+        && order.telegramId === String(query.from?.id)
+        && validateProduct(order.productId, query.total_amount, query.currency));
+      await answerPreCheckout(config.botToken, query.id, valid, valid ? undefined : 'Order validation failed.');
+      return res.json({ ok: true });
+    }
+    const payment = req.body?.message?.successful_payment;
+    if (payment) {
+      const order = await store.getOrder(payment.invoice_payload);
+      if (!order || !validateProduct(order.productId, payment.total_amount, payment.currency)) {
+        return res.status(400).json({ ok: false, error: 'INVALID_PAYMENT' });
+      }
+      await store.completeOrder({ orderId: order.orderId, externalId: payment.telegram_payment_charge_id, now: new Date() });
+    }
+    res.json({ ok: true });
+  }));
+
   app.get('/api/game', auth, playerLimit, asyncRoute(async (req, res) => {
     const now = new Date();
     const player = await store.mutate(req.session.telegramId, () => {}, now);
     res.json({ ok: true, game: publicGameState(player, now) });
+  }));
+
+  app.get('/api/game/commerce/catalog', auth, playerLimit, (_req, res) => {
+    res.json({ ok: true, products: catalogView({ starsEnabled: Boolean(config.botToken), tonEnabled: Boolean(config.tonWalletAddress && config.tonApiBaseUrl) }) });
+  });
+
+  app.post('/api/game/commerce/order', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const productId = String(req.body?.productId || '');
+    const method = String(req.body?.method || '');
+    if (!PRODUCT_CATALOG[productId]) {
+      const error = new Error('Unknown product.'); error.code = 'UNKNOWN_PRODUCT'; error.status = 400; throw error;
+    }
+    const order = await store.createOrder(req.session.telegramId, productId, method);
+    if (req.body?.demo === true && config.allowDevAuth) return res.json({ ok: true, orderId: order.orderId, method, demo: true });
+    if (method === 'stars') {
+      const invoiceLink = await createStarsInvoiceLink({ botToken: config.botToken, order });
+      return res.json({ ok: true, orderId: order.orderId, method, invoiceLink });
+    }
+    const transaction = tonPaymentRequest({ walletAddress: config.tonWalletAddress, order });
+    res.json({ ok: true, orderId: order.orderId, method, transaction });
+  }));
+
+  app.get('/api/game/commerce/order/:orderId', auth, playerLimit, asyncRoute(async (req, res) => {
+    const order = await store.getOrder(req.params.orderId);
+    if (!order || order.telegramId !== String(req.session.telegramId)) return res.status(404).json({ ok: false, error: 'ORDER_NOT_FOUND' });
+    res.json({ ok: true, order: { orderId: order.orderId, productId: order.productId, method: order.method, status: order.status, createdAt: order.createdAt, paidAt: order.paidAt } });
+  }));
+
+  app.post('/api/game/commerce/ton/verify', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const order = await store.getOrder(req.body?.orderId);
+    if (!order || order.telegramId !== String(req.session.telegramId) || order.method !== 'ton') return res.status(404).json({ ok: false, error: 'ORDER_NOT_FOUND' });
+    const transactionHash = await verifyTonTransaction({
+      apiBaseUrl: config.tonApiBaseUrl,
+      apiKey: config.tonApiKey,
+      walletAddress: config.tonWalletAddress,
+      order
+    });
+    if (!transactionHash) return res.json({ ok: true, status: 'pending' });
+    const completed = await store.completeOrder({ orderId: order.orderId, externalId: transactionHash, now: new Date() });
+    res.json({ ok: true, status: 'paid', game: publicGameState(completed.player) });
+  }));
+
+  app.post('/api/game/conversion/verify', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const event = String(req.body?.event || '');
+    if (!['first_trade'].includes(event)) return res.status(400).json({ ok: false, error: 'UNKNOWN_CONVERSION' });
+    const verified = await xradar.verifyConversion({ telegramId: req.session.telegramId, event });
+    if (!verified?.verified) return res.status(409).json({ ok: false, error: 'CONVERSION_NOT_VERIFIED' });
+    let reward = 0;
+    const player = await store.mutate(req.session.telegramId, current => {
+      if (!current.progression.conversion.rewarded.includes(event)) {
+        current.progression.conversion.rewarded.push(event);
+        current.resources.components += 10;
+        reward = 10;
+      }
+    }, new Date());
+    res.json({ ok: true, reward: { components: reward }, game: publicGameState(player) });
   }));
 
   app.post('/api/game/action/start', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
@@ -139,11 +255,29 @@ export function createApp({ store, config = getConfig() }) {
 
   app.post('/api/game/recon/resolve', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
     const now = new Date();
+    const current = await store.getPlayer(req.session.telegramId);
+    const selected = current?.progression?.recon?.signals?.find(signal => signal.id === req.body?.signalId);
+    const external = selected?.source === 'xradar'
+      ? await xradar.resolve(selected.externalId, req.body?.decision)
+      : null;
     let result;
     const player = await store.mutate(req.session.telegramId, current => {
-      result = resolveSignal(current, req.body?.signalId, req.body?.decision, now);
+      result = external
+        ? resolveExternalSignal(current, req.body?.signalId, req.body?.decision, external, now)
+        : resolveSignal(current, req.body?.signalId, req.body?.decision, now);
     }, now);
     res.json({ ok: true, result, game: publicGameState(player, now) });
+  }));
+
+  app.post('/api/game/recon/sync-live', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const now = new Date();
+    const current = await store.getPlayer(req.session.telegramId);
+    const count = Math.min(8, 3 + Math.floor((current?.rooms?.antenna?.level || 0) / 2));
+    const wave = await xradar.wave(count);
+    const player = await store.mutate(req.session.telegramId, state => {
+      importExternalSignals(state, wave, now);
+    }, now);
+    res.json({ ok: true, game: publicGameState(player, now) });
   }));
 
   app.post('/api/game/inventory/equip', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
@@ -152,6 +286,52 @@ export function createApp({ store, config = getConfig() }) {
       equipItem(current, req.body?.itemId);
     }, now);
     res.json({ ok: true, game: publicGameState(player, now) });
+  }));
+
+  app.post('/api/game/profile/appearance', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const now = new Date();
+    const player = await store.mutate(req.session.telegramId, current => {
+      updateAppearance(current, req.body);
+    }, now);
+    res.json({ ok: true, appearance: player.profile.appearance, game: publicGameState(player, now) });
+  }));
+
+  app.post('/api/game/profile/cosmetics', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const now = new Date();
+    const player = await store.mutate(req.session.telegramId, current => {
+      updateCosmetics(current, req.body);
+    }, now);
+    res.json({ ok: true, cosmetics: player.profile.cosmetics, game: publicGameState(player, now) });
+  }));
+
+  app.post('/api/game/referral/connect', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const deviceHash = hashDeviceId(req.body?.deviceId, config.sessionSecret);
+    const player = await store.registerReferral({ telegramId: req.session.telegramId, referralCode: req.body?.code, deviceHash, now: new Date() });
+    res.json({ ok: true, game: publicGameState(player) });
+  }));
+
+  app.get('/api/game/leaderboard', auth, playerLimit, asyncRoute(async (req, res) => {
+    const entries = await store.leaderboard(Number(req.query.limit || 20));
+    const ownIndex = entries.findIndex(entry => entry.telegramId === String(req.session.telegramId));
+    res.json({ ok: true, entries: entries.map(({ telegramId, ...entry }, index) => ({ ...entry, rank: index + 1, self: telegramId === String(req.session.telegramId) })), ownRank: ownIndex >= 0 ? ownIndex + 1 : null });
+  }));
+
+  app.post('/api/game/incident/start', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const now = new Date();
+    let incident;
+    const player = await store.mutate(req.session.telegramId, current => {
+      incident = startIncident(current, now);
+    }, now);
+    res.json({ ok: true, incident, game: publicGameState(player, now) });
+  }));
+
+  app.post('/api/game/incident/resolve', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const now = new Date();
+    let result;
+    const player = await store.mutate(req.session.telegramId, current => {
+      result = resolveIncident(current, req.body?.action, now);
+    }, now);
+    res.json({ ok: true, result, game: publicGameState(player, now) });
   }));
 
   app.post('/api/game/report/ack', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
@@ -163,10 +343,17 @@ export function createApp({ store, config = getConfig() }) {
   }));
 
   if (config.allowDevAuth) {
+    app.post('/api/dev/commerce/fulfill', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+      const order = await store.getOrder(req.body?.orderId);
+      if (!order || order.telegramId !== String(req.session.telegramId)) return res.status(404).json({ ok: false, error: 'ORDER_NOT_FOUND' });
+      const completed = await store.completeOrder({ orderId: order.orderId, externalId: `dev_${order.orderId}`, now: new Date() });
+      res.json({ ok: true, game: publicGameState(completed.player), grant: completed.order.grant });
+    }));
+
     app.post('/api/dev/reset', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
       const current = await store.getPlayer(req.session.telegramId);
       if (current) await store.players.deleteOne({ _id: current._id });
-      const player = await store.findOrCreateUser({ id: req.session.telegramId, first_name: 'Демо-оператор', username: 'local_demo' });
+      const player = await store.findOrCreateUser({ id: req.session.telegramId, first_name: 'Demo Operator', username: 'local_demo' });
       res.json({ ok: true, game: publicGameState(player) });
     }));
   }
@@ -200,6 +387,23 @@ function readCookie(req, name) {
   return null;
 }
 
+function hashDeviceId(value, secret) {
+  const deviceId = String(value || '').trim();
+  if (!deviceId || deviceId.length > 200) return null;
+  return crypto.createHmac('sha256', secret).update(deviceId).digest('hex');
+}
+
+async function answerPreCheckout(botToken, queryId, ok, errorMessage) {
+  if (!botToken) return false;
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/answerPreCheckoutQuery`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pre_checkout_query_id: queryId, ok, ...(ok ? {} : { error_message: errorMessage || 'Order validation failed.' }) }),
+    signal: AbortSignal.timeout(8_000)
+  });
+  return response.ok;
+}
+
 export function sessionCookie(value, secure, maxAge = 7 * 24 * 60 * 60) {
   return [
     `bunker_session=${encodeURIComponent(value)}`,
@@ -209,16 +413,6 @@ export function sessionCookie(value, secure, maxAge = 7 * 24 * 60 * 60) {
     secure ? 'Secure' : '',
     `Max-Age=${maxAge}`
   ].filter(Boolean).join('; ');
-}
-
-async function checkXradar(baseUrl) {
-  if (!baseUrl) return 'not-configured';
-  try {
-    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/health`, { signal: AbortSignal.timeout(2_000) });
-    return response.ok ? 'ok' : 'degraded';
-  } catch {
-    return 'unavailable';
-  }
 }
 
 export async function startServer(config = getConfig()) {

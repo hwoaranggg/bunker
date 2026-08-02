@@ -1,88 +1,81 @@
-# Бункер — Telegram Mini App v0.3
+# XRadar Lab — Telegram Mini App v1.0
 
-Третья итерация локальной игры-лаборатории для XRadar. Основной экран теперь построен вокруг крупного персонажа и живого бокового разреза убежища. Технические панели скрыты в нижних разделах, а функции открываются через объекты сцены.
+XRadar Lab is a phone-first underground market-intelligence management game. The operator restores an eight-room research station, studies simulated or live XRadar signals, equips a crew and expands production over ten room levels.
 
-## Что изменилось
+## Included in v1.0
 
-- крупный стилизованный инженер занимает примерно треть высоты комнаты;
-- один обжитой лабораторный зал вместо видимой сетки и восьми фундаментов;
-- новые помещения строятся этажами вниз;
-- сверху остаются только данные, энергия, компоненты и уровень;
-- снизу находятся пять разделов: «Убежище», «Задания», «Карта», «Инвентарь», «Персонаж»;
-- нажатие на оборудование сначала открывает контекст и подтверждение;
-- герой сам идёт к объекту по серверному маршруту;
-- одновременно выполняется только одна основная работа;
-- старая разведка со ставками и скрытым результатом удалена;
-- решение по сигналу выводится из видимых показателей: активности, ликвидности, концентрации и изменяемости контракта;
-- поставка приходит раз в день без серии входов и штрафа за пропуск;
-- одежда и инструменты экипируются и визуально меняют героя;
-- состояние v2 автоматически мигрирует в v3.
+- Fallout Shelter-inspired vertical station cutaway with eight distinct rooms and an elevator;
+- large animated operator in the Command Lab, separate from the environment art;
+- selectable female, male and custom operator sheets with idle, walking, working, alarm and tired states;
+- visible face, build, hair, gear and equipment customization;
+- five compact bottom sections: Station, Signals, Missions, Crew and Storage;
+- top-only resource HUD for Data, Energy and Components;
+- server-authoritative onboarding, actions, construction, movement, rewards and cooldowns;
+- ten levels for every room, milestone visuals and explicit unlock rules;
+- offline Data storage cap, room production, Energy regeneration and six-hour component supplies;
+- daily login streaks, daily recon objective, 42-day seasons, achievements and 30-day accuracy;
+- four rotating station incidents with tactical choices;
+- local deterministic signals plus optional live XRadar waves and verified outcomes;
+- durable MongoDB saves, schema-v5 migration, Telegram initData validation and signed sessions;
+- qualified referrals with anti-self-referral and shared-device risk marking;
+- leaderboard, conversion rewards and contextual XRadar calls to action;
+- Telegram Stars invoices, TON Connect transactions and idempotent server-side fulfillment;
+- Operator Pass, resource packs, instant completion and a cosmetic station pack;
+- reduced-motion support and responsive layouts for 380–430 px vertical phones.
 
-## Локальный предпросмотр без деплоя
+## Local preview
 
-Требуется Node.js 18 или новее.
+Node.js 18 or newer is required. The demo command starts its own persistent local MongoDB process; a system MongoDB installation is not required.
 
 ```powershell
-cd "C:\Users\даниил\Documents\Codex\2026-08-02\files-mentioned-by-the-user-telegram\outputs\bunker-telegram-mini-app"
+cd "C:\Users\даниил\Documents\Codex\2026-08-02\files-mentioned-by-the-user-telegram\outputs\xradar-lab-mini-app"
 npm install
-$env:PORT=3218
-$env:GAME_TIME_SCALE=0.01
+$env:PORT='3220'
+$env:GAME_TIME_SCALE='0.01'
 npm run demo
 ```
 
-Откройте `http://127.0.0.1:3218/` и нажмите «Запустить локальную смену».
+Open [http://127.0.0.1:3220/](http://127.0.0.1:3220/) and choose **Enter the Lab**. The local button uses development authentication only.
 
-`GAME_TIME_SCALE=0.01` ускоряет работы для просмотра дизайна. Для реальной длительности используйте `1`.
+`GAME_TIME_SCALE=0.01` accelerates jobs for visual review. Use `1` for production timings.
 
-Локальный MongoDB запускается автоматически через `mongodb-memory-server`, а данные сохраняются в `.mongo-data`. Чтобы начать обучение заново, откройте «Персонаж» и нажмите «Сбросить локальный прогресс».
-
-Остановка сервера: `Ctrl+C` в терминале.
-
-## Проверки
+## Validation
 
 ```powershell
 npm test
 npm run simulate:onboarding
+npm run simulate:30m
+node --check public/app.js
+node --check server.js
 ```
 
-Автоматические тесты проверяют:
+The 30-minute simulation fails if its expected room progression breaks or the first session contains a gap longer than ten minutes between active decisions, job completions and new actions.
 
-- миграцию v2 → v3;
-- одну активную работу персонажа;
-- серверный поиск пути и закрытые этажи;
-- серверные цены и награды;
-- однократную ежедневную поставку;
-- детерминированную разведку по видимым параметрам;
-- сохранение экипировки и активной работы;
-- cookie Telegram, подпись `initData`, сессию и rate limiter.
+## Production configuration
 
-Симуляция проходит раннее обучение при реальной скорости. Оно содержит последовательные действия и открывает первый нижний этаж менее чем за пять минут.
+Copy `.env.example` and provide:
 
-## Архитектура
+- `MONGODB_URI` and `MONGODB_DB` — durable player, order and payment storage;
+- `TELEGRAM_BOT_TOKEN` — Telegram Mini App authentication and Stars invoices;
+- `SESSION_SECRET` — at least 32 random characters;
+- `TELEGRAM_WEBHOOK_SECRET` — validates `/api/telegram/webhook` requests;
+- `XRADAR_BASE_URL` and `XRADAR_GAME_API_KEY` — live signal waves, outcome verification and conversion verification;
+- `TON_WALLET_ADDRESS`, `TON_API_BASE_URL` and `TON_API_KEY` — TON payment creation and verification;
+- `ALLOW_DEV_AUTH=false` and `NODE_ENV=production` in any public environment.
 
-- Node.js 18+, Express;
-- MongoDB и оптимистическая блокировка по `version`;
-- ванильный JS, inline CSS и JS;
-- кодовая SVG-графика без растровых ассетов, Canvas, WebGL и тяжёлых библиотек;
-- авторизация Telegram Mini App через проверку `initData`;
-- production-cookie: `SameSite=None; Secure`;
-- сервер авторитетен для маршрутов, ресурсов, наград, таймеров, строительства и разведки.
+Real XRadar, Stars and TON transactions remain unavailable until their credentials and external endpoints are supplied. Local development includes a deliberately isolated demo fulfillment route.
 
-Основные файлы:
+## Architecture
 
-- `server.js` — HTTP API, авторизация и ограничения;
-- `gameEngine.js` — схема v3, миграция и игровые правила;
-- `playerStore.js` — сохранение MongoDB;
-- `public/index.html` — мобильная сцена и полноэкранные разделы;
-- `test/` — автоматические проверки;
-- `scripts/simulate-first-5-minutes.js` — симуляция обучения.
+- `server.js` — HTTP API, Telegram webhook, commerce routes and security headers;
+- `gameEngine.js` — schema v5, economy, progression, incidents, recon and public state;
+- `playerStore.js` — MongoDB persistence, optimistic concurrency, payments, referrals and leaderboard;
+- `commerce.js` — catalog, Stars invoice creation and TON payload/verification;
+- `xradarClient.js` — external XRadar API adapter;
+- `public/index.html`, `public/styles.css` and `public/app.js` — phone-first client;
+- `public/assets` — room, laboratory and character visual layers;
+- `test` and `scripts` — automated tests and pacing simulations.
 
-## Переменные окружения
+## Security notes
 
-- `PORT` — порт сервера;
-- `MONGODB_URI`, `MONGODB_DB` — подключение MongoDB;
-- `TELEGRAM_BOT_TOKEN` — проверка Telegram `initData`;
-- `SESSION_SECRET` — подпись серверной сессии;
-- `ALLOW_DEV_AUTH=true` — локальная кнопка входа, недоступна в production;
-- `GAME_TIME_SCALE` — масштаб игровых таймеров;
-- `XRADAR_BASE_URL` — необязательная проверка доступности XRadar.
+The client never selects its own reward. Purchases are granted only after a verified payment event and every order is idempotent. Telegram requests, sessions, referrals and action rates are validated on the server. Keep the development login and demo fulfillment disabled outside local development.

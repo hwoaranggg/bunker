@@ -1,9 +1,11 @@
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 5;
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const RECON_INTERVAL_MS = 4 * 60 * 60 * 1000;
+export const INCIDENT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+export const SUPPLY_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 export const ROOM_ORDER = Object.freeze([
-  'lab', 'power', 'workshop', 'antenna', 'analysis', 'automation', 'interceptor', 'comms'
+  'lab', 'power', 'workshop', 'comms', 'automation', 'antenna', 'analysis', 'interceptor'
 ]);
 
 export const ROOM_DEFS = Object.freeze({
@@ -25,55 +27,103 @@ export const ROOM_DEFS = Object.freeze({
     floor: 2,
     name: 'Мастерская и склад',
     short: 'Здесь хранятся детали и создаётся экипировка.',
-    effect: 'Снижает стоимость следующих улучшений в компонентах.',
+    effect: 'Расширяет офлайн-склад и снижает стоимость улучшений в компонентах.',
     xradar: 'Защита позиции и управление инструментами'
   },
-  antenna: {
+  comms: {
     floor: 3,
+    name: 'Коммуникационный центр',
+    short: 'Связывает все системы убежища.',
+    effect: 'Ускоряет все работы на 4% за уровень, максимум на 40%.',
+    xradar: 'Живой поток рыночных данных'
+  },
+  automation: {
+    floor: 4,
+    name: 'Серверная автоматизации',
+    short: 'Продолжает наблюдение, когда оператор не в сети.',
+    effect: 'Увеличивает офлайн-производство данных на 15% за уровень.',
+    xradar: 'Автоматизация наблюдений'
+  },
+  antenna: {
+    floor: 5,
     name: 'Антенная комната',
     short: 'Принимает новые сигналы рынка.',
     effect: 'Открывает регулярную разведку и дополнительные сигналы.',
     xradar: 'Лента новых токенов'
   },
   analysis: {
-    floor: 4,
+    floor: 6,
     name: 'Аналитический центр',
     short: 'Раскрывает скрытые факторы риска.',
     effect: 'Показывает концентрацию держателей и изменяемость контракта.',
     xradar: 'Скоринг безопасности'
   },
-  automation: {
-    floor: 5,
-    name: 'Серверная автоматизации',
-    short: 'Продолжает наблюдение, когда оператор не в сети.',
-    effect: 'Увеличивает офлайн-производство данных.',
-    xradar: 'Автоматизация наблюдений'
-  },
   interceptor: {
-    floor: 6,
+    floor: 7,
     name: 'Узел перехвата',
     short: 'Отслеживает активность крупных кошельков.',
     effect: 'Добавляет показатель активности крупных держателей.',
     xradar: 'Лидерборд умных кошельков'
-  },
-  comms: {
-    floor: 7,
-    name: 'Коммуникационный центр',
-    short: 'Связывает все системы убежища.',
-    effect: 'Ускоряет работы и открывает расширенные задания.',
-    xradar: 'Живой поток рыночных данных'
   }
 });
 
-const BASE_ROOM_COSTS = Object.freeze({
-  lab: { data: 0, components: 0, durationMs: 0 },
-  power: { data: 80, components: 1, durationMs: 20_000 },
-  workshop: { data: 180, components: 2, durationMs: 90_000 },
-  antenna: { data: 350, components: 3, durationMs: 300_000 },
-  analysis: { data: 700, components: 5, durationMs: 600_000 },
-  automation: { data: 1_200, components: 7, durationMs: 1_200_000 },
-  interceptor: { data: 2_200, components: 10, durationMs: 1_800_000 },
-  comms: { data: 4_000, components: 15, durationMs: 3_600_000 }
+export const LEVEL_CURVE = Object.freeze({
+  1: { data: 50, components: 0, durationMs: 30_000, production: 10 },
+  2: { data: 150, components: 0, durationMs: 120_000, production: 25 },
+  3: { data: 400, components: 0, durationMs: 480_000, production: 55 },
+  4: { data: 1_000, components: 0, durationMs: 1_500_000, production: 110 },
+  5: { data: 2_500, components: 3, durationMs: 3_600_000, production: 200 },
+  6: { data: 6_000, components: 8, durationMs: 10_800_000, production: 350 },
+  7: { data: 15_000, components: 15, durationMs: 21_600_000, production: 600 },
+  8: { data: 35_000, components: 25, durationMs: 36_000_000, production: 1_000 },
+  9: { data: 80_000, components: 40, durationMs: 57_600_000, production: 1_700 },
+  10: { data: 180_000, components: 60, durationMs: 86_400_000, production: 3_000 }
+});
+
+const ROOM_FACTORS = Object.freeze({
+  lab: 1, power: 0.75, workshop: 0.9, comms: 1.15,
+  automation: 1.25, antenna: 1.35, analysis: 1.55, interceptor: 1.8
+});
+
+export const ACHIEVEMENT_DEFS = Object.freeze({
+  level_five_room: { title: 'Deep specialization', description: 'Upgrade any room to level 5.', components: 5 },
+  full_station: { title: 'Station complete', description: 'Open all eight station rooms.', components: 10 },
+  veteran_operator: { title: 'Veteran operator', description: 'Reach operator level 10.', components: 15 }
+});
+
+export const INCIDENT_DEFS = Object.freeze({
+  security_breach: {
+    title: 'Security breach',
+    description: 'An unknown device is probing the station network while the surface lock reports forced entry.',
+    outcomes: {
+      lockdown: { label: 'Lock down the elevator', energy: 8, reward: { data: 25, components: 1, xp: 20 }, message: 'Elevator sealed. The intrusion team withdrew.' },
+      isolate: { label: 'Isolate the signal network', energy: 5, reward: { data: 70, components: 0, xp: 16 }, message: 'Signal network isolated. The hostile probe was contained.' }
+    }
+  },
+  coolant_leak: {
+    title: 'Coolant leak',
+    description: 'A fractured coolant line is overheating the automation racks.',
+    outcomes: {
+      vent: { label: 'Vent the server room', energy: 4, reward: { data: 35, components: 1, xp: 18 }, message: 'Pressure released. The racks are stable.' },
+      seal: { label: 'Seal and recycle coolant', energy: 7, reward: { data: 20, components: 2, xp: 22 }, message: 'The fracture was sealed and spare material recovered.' }
+    }
+  },
+  power_surge: {
+    title: 'Grid overload',
+    description: 'A surface surge is cascading through the lower station grid.',
+    outcomes: {
+      reroute: { label: 'Reroute through reserve cells', energy: 10, reward: { data: 55, components: 1, xp: 24 }, message: 'The surge was absorbed by reserve cells.' },
+      shutdown: { label: 'Shut down noncritical systems', energy: 3, reward: { data: 30, components: 0, xp: 16 }, message: 'Noncritical systems went dark and the grid recovered.' }
+    }
+  },
+  signal_spoof: {
+    title: 'Spoofed market signal',
+    description: 'A forged feed is attempting to poison the station analysis models.',
+    outcomes: {
+      trace: { label: 'Trace the hostile relay', energy: 6, reward: { data: 85, components: 1, xp: 24 }, message: 'The relay was traced and its data cache recovered.' },
+      purge: { label: 'Purge the contaminated feed', energy: 4, reward: { data: 40, components: 0, xp: 18 }, message: 'The forged feed was removed before it reached analysis.' }
+    }
+  }
 });
 
 export const ITEM_DEFS = Object.freeze({
@@ -114,7 +164,17 @@ export function createPlayer({ telegramId, firstName = 'Оператор', usern
   const player = {
     schemaVersion: SCHEMA_VERSION,
     telegramId: String(telegramId),
-    profile: { firstName, username },
+    profile: {
+      firstName,
+      username,
+      appearance: createAppearance(firstName),
+      cosmetics: { neon: 'cyan', floor: 'steel', heroSkin: 'standard' },
+      referralCode: createReferralCode(telegramId),
+      referredBy: null,
+      referralSettled: false,
+      deviceHashes: [],
+      riskFlags: []
+    },
     resources: {
       data: 240,
       energy: 72,
@@ -131,22 +191,56 @@ export function createPlayer({ telegramId, firstName = 'Оператор', usern
       outfit: { body: 'field_coat', tool: null, head: null }
     },
     rooms: createRooms(),
+    crew: createCrew(),
     progression: {
       onboarding: { step: 0, completed: false },
-      supply: { lastClaimDay: null, claims: 0, lastReward: 0, lastClaimedAt: null },
+      supply: { nextAt: timestamp, claims: 0, lastReward: 0, lastClaimedAt: null },
+      streak: { current: 1, best: 1, lastDay: dayKey(timestamp), lastReward: 1 },
       recon: { round: 0, signals: [], nextAt: timestamp, lastResult: null },
       inventory: { owned: ['field_coat'], newItem: null },
+      achievements: { earned: [], newAchievement: null },
+      daily: { day: dayKey(timestamp), attempts: 0, correct: 0, rewardClaimed: false },
+      season: { id: seasonId(timestamp), attempts: 0, correct: 0 },
+      commerce: { subscriptionUntil: null, entitlements: [], processedOrders: [] },
+      secondaryJob: null,
+      conversion: { shown: [], rewarded: [] },
+      referrals: { day: dayKey(timestamp), qualifiedToday: 0, total: 0 },
       cooldowns: { terminal: timestamp, generator: timestamp },
+      incidents: { active: null, completed: 0, nextAt: timestamp, lastCompleted: null },
       returnReport: null,
       lastCompleted: null
     },
-    stats: { completedJobs: 0, completedRooms: 1, supplyClaims: 0, reconAttempts: 0, reconCorrect: 0 },
+    stats: { completedJobs: 0, completedRooms: 1, supplyClaims: 0, reconAttempts: 0, reconCorrect: 0, reconHistory: [], referralsQualified: 0 },
     version: 0,
     createdAt: timestamp,
     updatedAt: timestamp
   };
   player.progression.recon.signals = createSignals(player, timestamp);
   return player;
+}
+
+function createAppearance(firstName = 'Operator') {
+  const initialName = String(firstName || '').trim();
+  return { callSign: initialName && initialName !== 'Оператор' ? initialName.slice(0, 18) : 'Operator', gender: 'custom', face: 3, build: 3, hair: 4, gear: 2 };
+}
+
+function createReferralCode(telegramId) {
+  const numeric = BigInt(String(telegramId || '0').replace(/\D/g, '') || '0');
+  return `XR${numeric.toString(36).toUpperCase()}`;
+}
+
+function seasonId(value) {
+  const epoch = Date.UTC(2026, 0, 1);
+  const index = Math.max(0, Math.floor((asMs(value) - epoch) / (42 * DAY_MS)));
+  return `S${String(index + 1).padStart(2, '0')}`;
+}
+
+function createCrew() {
+  return {
+    operator: { id: 'operator', role: 'Field Intelligence Lead', name: 'Operator', recruited: true, level: 1, status: 'ready' },
+    engineer: { id: 'engineer', role: 'Station Engineer', name: 'Mara Voss', recruited: false, level: 1, status: 'locked' },
+    analyst: { id: 'analyst', role: 'Signal Analyst', name: 'Signal Analyst', recruited: false, level: 1, status: 'locked' }
+  };
 }
 
 function createRooms() {
@@ -160,10 +254,22 @@ function createRooms() {
 
 export function ensurePlayerShape(player, now = new Date()) {
   if (!player || typeof player !== 'object') throw gameError('INVALID_PLAYER', 'Состояние игрока повреждено.', 500);
-  if (Number(player.schemaVersion || 1) < SCHEMA_VERSION || !player.rooms) migratePlayerV2(player, now);
+  // v3 already uses rooms. Running the legacy v2 migration on it would erase
+  // constructed floors, so only the pre-room model goes through that converter.
+  if (Number(player.schemaVersion || 1) <= 2 || !player.rooms) migratePlayerV2(player, now);
   const timestamp = new Date(now);
   player.schemaVersion = SCHEMA_VERSION;
   player.profile ||= { firstName: 'Оператор', username: null };
+  player.profile.appearance ||= createAppearance(player.profile.firstName);
+  if (/\?{3,}|�|(?:Р.|Ð.){3,}/.test(String(player.profile.appearance.callSign || ''))) {
+    player.profile.appearance.callSign = 'Operator';
+  }
+  player.profile.cosmetics ||= { neon: 'cyan', floor: 'steel', heroSkin: 'standard' };
+  player.profile.referralCode ||= createReferralCode(player.telegramId);
+  player.profile.referredBy ??= null;
+  player.profile.referralSettled ??= false;
+  player.profile.deviceHashes ||= [];
+  player.profile.riskFlags ||= [];
   player.resources ||= {};
   player.resources.data ??= 0;
   player.resources.energy ??= 60;
@@ -185,9 +291,17 @@ export function ensurePlayerShape(player, now = new Date()) {
   player.hero.xp ??= 0;
   player.hero.job ??= null;
   player.hero.outfit ||= { body: 'field_coat', tool: null, head: null };
+  player.crew ||= createCrew();
+  for (const [id, fallback] of Object.entries(createCrew())) {
+    player.crew[id] = { ...fallback, ...(player.crew[id] || {}) };
+  }
   player.progression ||= {};
   player.progression.onboarding ||= { step: 5, completed: true };
-  player.progression.supply ||= { lastClaimDay: null, claims: 0, lastReward: 0, lastClaimedAt: null };
+  player.progression.supply ||= { nextAt: timestamp, claims: 0, lastReward: 0, lastClaimedAt: null };
+  player.progression.supply.nextAt ||= player.progression.supply.lastClaimedAt
+    ? new Date(asMs(player.progression.supply.lastClaimedAt) + SUPPLY_INTERVAL_MS)
+    : timestamp;
+  player.progression.streak ||= { current: 1, best: 1, lastDay: dayKey(timestamp), lastReward: 1 };
   player.progression.recon ||= { round: 0, signals: [], nextAt: timestamp, lastResult: null };
   player.progression.recon.signals ||= [];
   // Сигналы, сохранённые до появления рыночной карточки, дополняем на месте:
@@ -200,9 +314,25 @@ export function ensurePlayerShape(player, now = new Date()) {
   player.progression.inventory ||= { owned: ['field_coat'], newItem: null };
   player.progression.inventory.owned ||= ['field_coat'];
   if (!player.progression.inventory.owned.includes('field_coat')) player.progression.inventory.owned.unshift('field_coat');
+  player.progression.achievements ||= { earned: [], newAchievement: null };
+  player.progression.achievements.earned ||= [];
+  player.progression.achievements.newAchievement ??= null;
+  player.progression.daily ||= { day: dayKey(timestamp), attempts: 0, correct: 0, rewardClaimed: false };
+  player.progression.season ||= { id: seasonId(timestamp), attempts: 0, correct: 0 };
+  player.progression.commerce ||= { subscriptionUntil: null, entitlements: [], processedOrders: [] };
+  player.progression.commerce.entitlements ||= [];
+  player.progression.commerce.processedOrders ||= [];
+  player.progression.secondaryJob ??= null;
+  player.progression.conversion ||= { shown: [], rewarded: [] };
+  player.progression.referrals ||= { day: dayKey(timestamp), qualifiedToday: 0, total: 0 };
   player.progression.cooldowns ||= { terminal: timestamp, generator: timestamp };
   player.progression.cooldowns.terminal ||= timestamp;
   player.progression.cooldowns.generator ||= timestamp;
+  player.progression.incidents ||= { active: null, completed: 0, nextAt: timestamp, lastCompleted: null };
+  player.progression.incidents.active ??= null;
+  player.progression.incidents.completed ??= 0;
+  player.progression.incidents.nextAt ||= timestamp;
+  player.progression.incidents.lastCompleted ??= null;
   player.progression.returnReport ??= null;
   player.progression.lastCompleted ??= null;
   player.stats ||= {};
@@ -211,7 +341,180 @@ export function ensurePlayerShape(player, now = new Date()) {
   player.stats.supplyClaims ??= 0;
   player.stats.reconAttempts ??= 0;
   player.stats.reconCorrect ??= 0;
+  player.stats.reconHistory ||= [];
+  player.stats.referralsQualified ??= 0;
+  syncCrew(player);
   return player;
+}
+
+function syncCrew(player) {
+  const incidentActive = Boolean(player.progression?.incidents?.active);
+  player.crew.operator.name = player.profile?.appearance?.callSign || player.profile?.firstName || 'Operator';
+  player.crew.operator.level = Math.max(1, Number(player.hero?.level || 1));
+  player.crew.operator.recruited = true;
+  player.crew.operator.status = incidentActive ? 'alert' : player.hero?.job ? 'assigned' : 'ready';
+
+  const engineerOpen = (player.rooms?.power?.level || 0) > 0;
+  player.crew.engineer.recruited = player.crew.engineer.recruited || engineerOpen;
+  player.crew.engineer.status = player.crew.engineer.recruited ? incidentActive ? 'alert' : player.hero?.job ? 'supporting' : 'available' : 'locked';
+
+  const analystOpen = (player.rooms?.antenna?.level || 0) > 0;
+  player.crew.analyst.recruited = player.crew.analyst.recruited || analystOpen;
+  player.crew.analyst.status = player.crew.analyst.recruited ? incidentActive ? 'alert' : 'monitoring' : 'locked';
+}
+
+export function updateAppearance(player, appearance = {}) {
+  ensurePlayerShape(player);
+  const callSign = String(appearance.callSign ?? '').trim().replace(/\s+/g, ' ');
+  if (!callSign || Array.from(callSign).length > 18) {
+    throw gameError('INVALID_APPEARANCE', 'Позывной должен содержать от 1 до 18 символов.');
+  }
+  const gender = String(appearance.gender || '');
+  if (!['female', 'male', 'custom'].includes(gender)) {
+    throw gameError('INVALID_APPEARANCE', 'Неизвестный вариант внешности.');
+  }
+  const limits = { face: 6, build: 5, hair: 8, gear: 5 };
+  const normalized = { callSign, gender };
+  for (const [key, max] of Object.entries(limits)) {
+    const value = Number(appearance[key]);
+    if (!Number.isInteger(value) || value < 1 || value > max) {
+      throw gameError('INVALID_APPEARANCE', 'Параметры внешности вне допустимого диапазона.');
+    }
+    normalized[key] = value;
+  }
+  player.profile.appearance = normalized;
+  syncCrew(player);
+  return normalized;
+}
+
+export function updateCosmetics(player, cosmetics = {}) {
+  ensurePlayerShape(player);
+  const allowed = {
+    neon: ['cyan', 'amber', 'ice'],
+    floor: ['steel', 'concrete', 'grid'],
+    heroSkin: ['standard', 'field', 'command']
+  };
+  const normalized = {};
+  for (const [key, values] of Object.entries(allowed)) {
+    const value = String(cosmetics[key] || '');
+    if (!values.includes(value)) throw gameError('INVALID_COSMETIC', 'Неизвестный косметический вариант.');
+    const entitlement = `cosmetic:${key}:${value}`;
+    const isDefault = value === values[0];
+    if (!isDefault && !player.progression.commerce.entitlements.includes(entitlement)) {
+      throw gameError('COSMETIC_LOCKED', 'Этот косметический вариант ещё не открыт.');
+    }
+    normalized[key] = value;
+  }
+  player.profile.cosmetics = normalized;
+  return normalized;
+}
+
+export function grantCommerceProduct(player, productId, orderId, now = new Date()) {
+  ensurePlayerShape(player, now);
+  const commerce = player.progression.commerce;
+  if (!orderId) throw gameError('INVALID_ORDER', 'Идентификатор заказа обязателен.');
+  if (commerce.processedOrders.includes(orderId)) return { duplicate: true, productId };
+  const grants = {
+    energy_refill: () => {
+      player.resources.energy = energyMax(player);
+      return { energy: energyMax(player) };
+    },
+    parts_pack: () => {
+      player.resources.components += 20;
+      return { components: 20 };
+    },
+    instant_finish: () => {
+      const slot = player.hero.job ? 'primary' : player.progression.secondaryJob ? 'secondary' : null;
+      if (!slot) throw gameError('NO_ACTIVE_JOB', 'Нет активной работы для ускорения.');
+      completeJob(player, now, slot);
+      return { finished: slot };
+    },
+    operator_pass: () => {
+      const base = commerce.subscriptionUntil && asMs(commerce.subscriptionUntil) > asMs(now)
+        ? asMs(commerce.subscriptionUntil)
+        : asMs(now);
+      commerce.subscriptionUntil = new Date(base + 30 * DAY_MS);
+      player.resources.components += 8;
+      return { subscriptionUntil: commerce.subscriptionUntil, components: 8 };
+    },
+    cosmetic_station_pack: () => {
+      const unlocks = [
+        'cosmetic:neon:amber', 'cosmetic:neon:ice',
+        'cosmetic:floor:concrete', 'cosmetic:floor:grid',
+        'cosmetic:heroSkin:field', 'cosmetic:heroSkin:command'
+      ];
+      for (const entitlement of unlocks) if (!commerce.entitlements.includes(entitlement)) commerce.entitlements.push(entitlement);
+      return { entitlements: unlocks };
+    }
+  };
+  const grant = grants[productId];
+  if (!grant) throw gameError('UNKNOWN_PRODUCT', 'Неизвестный товар.');
+  const result = grant();
+  commerce.processedOrders.push(orderId);
+  commerce.processedOrders = commerce.processedOrders.slice(-100);
+  return { duplicate: false, productId, ...result };
+}
+
+export function startIncident(player, now = new Date()) {
+  ensurePlayerShape(player, now);
+  requireIdleHero(player);
+  if (!player.progression.onboarding.completed) {
+    throw gameError('INCIDENT_LOCKED', 'Сначала завершите восстановление станции.');
+  }
+  const incidents = player.progression.incidents;
+  if (incidents.active) throw gameError('INCIDENT_ACTIVE', 'Тревога уже активна.');
+  if (asMs(now) < asMs(incidents.nextAt)) {
+    throw gameError('INCIDENT_COOLDOWN', 'Системы безопасности ещё анализируют прошлую тревогу.');
+  }
+  const types = Object.keys(INCIDENT_DEFS);
+  const type = types[incidents.completed % types.length];
+  const definition = INCIDENT_DEFS[type];
+  incidents.active = {
+    id: `incident_${incidents.completed + 1}_${asMs(now)}`,
+    type,
+    title: definition.title,
+    description: definition.description,
+    options: Object.entries(definition.outcomes).map(([id, option]) => ({ id, label: option.label, energy: option.energy, reward: option.reward })),
+    startedAt: new Date(now),
+    status: 'active'
+  };
+  syncCrew(player);
+  return incidents.active;
+}
+
+export function resolveIncident(player, action, now = new Date()) {
+  ensurePlayerShape(player, now);
+  const incidents = player.progression.incidents;
+  if (!incidents.active) throw gameError('NO_ACTIVE_INCIDENT', 'Активная тревога не найдена.');
+  const outcome = INCIDENT_DEFS[incidents.active.type]?.outcomes?.[action];
+  if (!outcome) throw gameError('INVALID_INCIDENT_ACTION', 'Выберите способ подавления тревоги.');
+  if (player.resources.energy < outcome.energy) {
+    throw gameError('NOT_ENOUGH_ENERGY', `Нужно ${outcome.energy} энергии.`);
+  }
+  player.resources.energy -= outcome.energy;
+  applyReward(player, outcome.reward);
+  updateHeroLevel(player);
+  const result = {
+    id: incidents.active.id,
+    type: incidents.active.type,
+    action,
+    cost: { energy: outcome.energy },
+    reward: outcome.reward,
+    message: outcome.message,
+    resolvedAt: new Date(now)
+  };
+  incidents.active = null;
+  incidents.completed += 1;
+  incidents.nextAt = new Date(asMs(now) + INCIDENT_COOLDOWN_MS);
+  incidents.lastCompleted = result;
+  player.progression.lastCompleted = {
+    id: result.id,
+    title: 'Security incident contained',
+    reward: result.reward,
+    at: new Date(now)
+  };
+  syncCrew(player);
+  return result;
 }
 
 export function migratePlayerV2(player, now = new Date()) {
@@ -260,6 +563,7 @@ export function migratePlayerV2(player, now = new Date()) {
     recon: { round: 0, signals: [], nextAt: timestamp, lastResult: null },
     inventory: { owned: ['field_coat'], newItem: null },
     cooldowns: { terminal: timestamp, generator: timestamp },
+    incidents: { active: null, completed: 0, nextAt: timestamp, lastCompleted: null },
     returnReport: null,
     lastCompleted: { id: 'migration_v3', title: 'Системы убежища обновлены', at: timestamp }
   };
@@ -276,8 +580,23 @@ export function migratePlayerV2(player, now = new Date()) {
 
 export function dataProductionPerHour(player) {
   const lab = player.rooms?.lab?.level || 1;
+  return LEVEL_CURVE[Math.min(10, lab)]?.production || 10;
+}
+
+export function offlineDataProductionPerHour(player) {
   const automation = player.rooms?.automation?.level || 0;
-  return Math.round((12 + Math.max(0, lab - 1) * 8) * (1 + automation * 0.2));
+  return Math.round(dataProductionPerHour(player) * (1 + automation * 0.15));
+}
+
+export function subscriptionActive(player, now = new Date()) {
+  const until = player.progression?.commerce?.subscriptionUntil;
+  return Boolean(until && asMs(until) > asMs(now));
+}
+
+export function offlineCapacityHours(player, now = new Date()) {
+  const workshop = player.rooms?.workshop?.level || 0;
+  const base = Math.min(11, 6 + Math.floor(workshop / 2));
+  return subscriptionActive(player, now) ? base * 1.5 : base;
 }
 
 export function energyMax(player) {
@@ -295,16 +614,22 @@ export function openRoomCount(player) {
 export function advancePlayer(player, now = new Date()) {
   ensurePlayerShape(player, now);
   const nowMs = asMs(now);
+  updateCalendarProgress(player, now);
   const accruedAtMs = asMs(player.resources.lastAccruedAt);
   const elapsedMs = clamp(nowMs - accruedAtMs, 0, 30 * DAY_MS);
-  const productiveMs = Math.min(elapsedMs, 8 * 60 * 60 * 1000);
-  const dataGain = dataProductionPerHour(player) * productiveMs / 3_600_000;
+  const capacityHours = offlineCapacityHours(player, now);
+  const productiveMs = Math.min(elapsedMs, capacityHours * 60 * 60 * 1000);
+  const stoppedMs = Math.max(0, elapsedMs - productiveMs);
+  const dataGain = offlineDataProductionPerHour(player) * productiveMs / 3_600_000;
   if (dataGain > 0) {
     player.resources.data += dataGain;
     if (elapsedMs >= 60_000) {
-      const report = player.progression.returnReport || { data: 0, hours: 0, createdAt: new Date(now) };
+      const report = player.progression.returnReport || { data: 0, hours: 0, stoppedHours: 0, createdAt: new Date(now) };
       report.data += dataGain;
       report.hours += productiveMs / 3_600_000;
+      report.stoppedHours += stoppedMs / 3_600_000;
+      report.capacityHours = capacityHours;
+      report.full = stoppedMs > 0;
       report.createdAt = new Date(now);
       player.progression.returnReport = report;
     }
@@ -317,19 +642,67 @@ export function advancePlayer(player, now = new Date()) {
   player.resources.energy = clamp(player.resources.energy + energyGain, 0, energyMax(player));
   player.resources.lastEnergyAt = new Date(nowMs);
 
-  if (player.hero.job && nowMs >= asMs(player.hero.job.endsAt)) completeJob(player, now);
+  if (player.hero.job && nowMs >= asMs(player.hero.job.endsAt)) completeJob(player, now, 'primary');
+  if (player.progression.secondaryJob && nowMs >= asMs(player.progression.secondaryJob.endsAt)) completeJob(player, now, 'secondary');
   if (reconAvailable(player, now) && player.progression.recon.signals.length === 0) {
     player.progression.recon.signals = createSignals(player, now);
   }
+  checkAchievements(player, now);
   player.updatedAt = new Date(nowMs);
+  syncCrew(player);
   return player;
 }
 
-function completeJob(player, now) {
-  const job = player.hero.job;
+function updateCalendarProgress(player, now) {
+  const today = dayKey(now);
+  const streak = player.progression.streak;
+  if (streak.lastDay !== today) {
+    const previousMs = asMs(`${streak.lastDay || today}T00:00:00Z`);
+    const currentMs = asMs(`${today}T00:00:00Z`);
+    streak.current = currentMs - previousMs === DAY_MS ? Math.min(999, Number(streak.current || 0) + 1) : 1;
+    streak.best = Math.max(Number(streak.best || 1), streak.current);
+    streak.lastDay = today;
+    const rewards = [1, 2, 3, 5, 8];
+    streak.lastReward = rewards[Math.min(rewards.length - 1, streak.current - 1)];
+    const passComponents = subscriptionActive(player, now) ? 3 : 0;
+    player.resources.components += streak.lastReward + passComponents;
+    const report = player.progression.returnReport || { data: 0, hours: 0, stoppedHours: 0, createdAt: new Date(now) };
+    report.streak = { day: streak.current, components: streak.lastReward, passComponents };
+    report.createdAt = new Date(now);
+    player.progression.returnReport = report;
+  }
+  if (player.progression.daily.day !== today) {
+    player.progression.daily = { day: today, attempts: 0, correct: 0, rewardClaimed: false };
+  }
+  const currentSeason = seasonId(now);
+  if (player.progression.season.id !== currentSeason) {
+    player.progression.season = { id: currentSeason, attempts: 0, correct: 0 };
+  }
+}
+
+function checkAchievements(player, now = new Date()) {
+  const earned = player.progression.achievements.earned;
+  const checks = {
+    level_five_room: ROOM_ORDER.some(id => (player.rooms[id]?.level || 0) >= 5),
+    full_station: openRoomCount(player) === ROOM_ORDER.length,
+    veteran_operator: (player.hero?.level || 1) >= 10
+  };
+  for (const [id, complete] of Object.entries(checks)) {
+    if (!complete || earned.includes(id)) continue;
+    earned.push(id);
+    player.resources.components += ACHIEVEMENT_DEFS[id].components;
+    player.progression.achievements.newAchievement = { id, ...ACHIEVEMENT_DEFS[id], earnedAt: new Date(now) };
+  }
+}
+
+function completeJob(player, now, slot = 'primary') {
+  const job = slot === 'secondary' ? player.progression.secondaryJob : player.hero.job;
   if (!job) return;
-  player.hero.job = null;
-  player.hero.state = 'idle';
+  if (slot === 'secondary') player.progression.secondaryJob = null;
+  else {
+    player.hero.job = null;
+    player.hero.state = 'idle';
+  }
   if (job.type === 'construction') {
     const room = player.rooms[job.roomId];
     room.level = job.targetLevel;
@@ -340,6 +713,7 @@ function completeJob(player, now) {
     if (job.roomId === 'workshop') grantItem(player, 'utility_vest');
     if (job.roomId === 'antenna') grantItem(player, 'field_tablet');
   }
+  if (job.actionId === 'boot_terminal') player.rooms.lab.level = Math.max(2, player.rooms.lab.level);
   applyReward(player, job.reward || {});
   if (Number.isInteger(job.onboardingStep) && player.progression.onboarding.step === job.onboardingStep) {
     player.progression.onboarding.step += 1;
@@ -353,6 +727,7 @@ function completeJob(player, now) {
     at: new Date(now)
   };
   updateHeroLevel(player);
+  checkAchievements(player, now);
 }
 
 function applyReward(player, reward) {
@@ -378,15 +753,26 @@ export function roomAccess(player, roomId) {
   const room = player.rooms?.[roomId];
   if (!room) return { unlocked: false, reason: 'Неизвестное помещение.' };
   if (room.level > 0 || room.construction) return { unlocked: true, reason: null };
-  const index = ROOM_ORDER.indexOf(roomId);
-  const previous = ROOM_ORDER[index - 1];
-  if (index <= 0) return { unlocked: true, reason: null };
-  if ((player.rooms[previous]?.level || 0) <= 0) {
-    return { unlocked: false, reason: `Сначала откройте «${ROOM_DEFS[previous].name}».` };
-  }
+  if (roomId === 'lab') return { unlocked: true, reason: null };
   if (roomId === 'power' && !player.progression.onboarding.completed && player.progression.onboarding.step < 4) {
     return { unlocked: false, reason: 'Сначала восстановите системы лаборатории.' };
   }
+  if (roomId === 'power' && !player.progression.onboarding.completed && player.progression.onboarding.step >= 4) {
+    return { unlocked: true, reason: null };
+  }
+  const level = id => Number(player.rooms?.[id]?.level || 0);
+  const levelThreeRooms = ROOM_ORDER.filter(id => level(id) >= 3).length;
+  const rules = {
+    power: [level('lab') >= 2, 'Нужен терминал 2 уровня.'],
+    workshop: [level('lab') >= 3, 'Нужен терминал 3 уровня.'],
+    comms: [levelThreeRooms >= 2, 'Нужны любые два помещения 3 уровня.'],
+    automation: [level('workshop') >= 3, 'Нужна мастерская и склад 3 уровня.'],
+    antenna: [level('comms') >= 2, 'Нужен коммуникационный центр 2 уровня.'],
+    analysis: [level('antenna') >= 3, 'Нужна антенная комната 3 уровня.'],
+    interceptor: [level('analysis') >= 4, 'Нужен аналитический центр 4 уровня.']
+  };
+  const rule = rules[roomId];
+  if (rule && !rule[0]) return { unlocked: false, reason: rule[1] };
   return { unlocked: true, reason: null };
 }
 
@@ -394,25 +780,29 @@ export function roomCost(player, roomId, targetLevel = null) {
   const room = player.rooms?.[roomId];
   if (!room) return null;
   const level = targetLevel || room.level + 1;
-  const base = BASE_ROOM_COSTS[roomId];
-  if (!base || level > 5) return null;
-  const multiplier = level === 1 ? 1 : Math.pow(2.15, level - 1);
-  const discount = equippedBonus(player, 'componentDiscount');
-  const workSpeed = 1 + equippedBonus(player, 'workSpeed') + (player.rooms?.comms?.level || 0) * 0.05;
+  const curve = LEVEL_CURVE[level];
+  const factor = ROOM_FACTORS[roomId];
+  if (!curve || !factor || level > 10) return null;
+  const discount = equippedBonus(player, 'componentDiscount') + Math.floor((player.rooms?.workshop?.level || 0) / 4);
+  const commsSpeed = Math.min(0.4, (player.rooms?.comms?.level || 0) * 0.04);
+  const workSpeed = 1.2 + equippedBonus(player, 'workSpeed') + commsSpeed;
   return {
     level,
-    data: Math.round(base.data * multiplier || 60 * multiplier),
-    components: Math.max(0, Math.round((base.components || 1) * multiplier) - discount),
-    energy: level === 1 ? 8 : 6,
-    durationMs: Math.max(2_000, Math.round((base.durationMs || 30_000) * multiplier / workSpeed))
+    data: Math.max(0, Math.round(curve.data * factor)),
+    components: Math.max(0, curve.components - discount),
+    energy: level === 1 ? 8 : Math.min(14, 5 + Math.ceil(level / 2)),
+    durationMs: Math.max(2_000, Math.round(curve.durationMs * Math.max(0.35, factor) / workSpeed))
   };
 }
 
 export function startConstruction(player, roomId, now = new Date(), timeScale = 1) {
   ensurePlayerShape(player, now);
-  requireIdleHero(player);
+  if (player.progression?.incidents?.active) throw gameError('INCIDENT_ACTIVE', 'Сначала устраните тревогу на станции.');
+  const secondarySlot = Boolean(player.hero.job && subscriptionActive(player, now) && !player.progression.secondaryJob);
+  if (player.hero.job && !secondarySlot) throw gameError('HERO_BUSY', subscriptionActive(player, now) ? 'Оба строительных слота заняты.' : 'Сначала дождитесь завершения текущей работы.');
   const room = player.rooms[roomId];
   if (!room) throw gameError('UNKNOWN_ROOM', 'Неизвестное помещение.');
+  if (room.construction) throw gameError('ROOM_BUSY', 'Это помещение уже строится.');
   const access = roomAccess(player, roomId);
   if (!access.unlocked) throw gameError('LOCKED_ROOM', access.reason);
   const cost = roomCost(player, roomId);
@@ -422,13 +812,15 @@ export function startConstruction(player, roomId, now = new Date(), timeScale = 
   if (player.resources.energy < cost.energy) throw gameError('NOT_ENOUGH_ENERGY', `Нужно ${cost.energy} энергии.`);
 
   const currentFloor = highestOpenFloor(player);
-  const targetNode = room.level > 0 ? `floor_${room.floor}_console` : currentFloor === 0 ? 'lab_elevator' : `floor_${currentFloor}_elevator`;
+  const targetNode = roomId === 'lab'
+    ? 'lab_terminal'
+    : room.level > 0 ? `floor_${room.floor}_console` : currentFloor === 0 ? 'lab_elevator' : `floor_${currentFloor}_elevator`;
   const path = findPath(player, targetNode);
   if (!path) throw gameError('UNREACHABLE_OBJECT', 'Переход к строительной зоне пока закрыт.');
   player.resources.data -= cost.data;
   player.resources.components -= cost.components;
   player.resources.energy -= cost.energy;
-  player.hero.node = targetNode;
+  if (!secondarySlot) player.hero.node = targetNode;
   const durationMs = Math.max(1_000, Math.round(cost.durationMs * Number(timeScale || 1)));
   const job = {
     id: `build_${roomId}_${cost.level}_${asMs(now)}`,
@@ -439,9 +831,13 @@ export function startConstruction(player, roomId, now = new Date(), timeScale = 
   };
   if (roomId === 'power' && player.progression.onboarding.step === 4) job.onboardingStep = 4;
   room.construction = { targetLevel: cost.level, startedAt: job.startedAt, endsAt: job.endsAt, durationMs };
-  player.hero.job = job;
-  player.hero.state = 'building';
-  return { room, job, path };
+  job.slot = secondarySlot ? 'automation' : 'operator';
+  if (secondarySlot) player.progression.secondaryJob = job;
+  else {
+    player.hero.job = job;
+    player.hero.state = 'building';
+  }
+  return { room, job, path: secondarySlot ? [] : path };
 }
 
 export function startObjectAction(player, actionId, now = new Date(), timeScale = 1) {
@@ -463,8 +859,8 @@ export function startObjectAction(player, actionId, now = new Date(), timeScale 
     onboardingStep: spec.onboardingStep
   };
   if (actionId === 'daily_supply') {
-    player.progression.supply.lastClaimDay = dayKey(now);
     player.progression.supply.lastClaimedAt = new Date(now);
+    player.progression.supply.nextAt = new Date(asMs(now) + SUPPLY_INTERVAL_MS);
     player.progression.supply.claims += 1;
     player.progression.supply.lastReward = spec.reward.components;
     player.stats.supplyClaims += 1;
@@ -496,8 +892,8 @@ function actionSpec(player, actionId, now) {
     },
     daily_supply: {
       objectId: 'supply', node: 'lab_supply', state: 'collecting', durationMs: 2_500, energy: 0,
-      reward: { components: 3, xp: 5 }, completeTitle: 'Поставка принята',
-      enabled: supplyReady(player, now), reason: 'Сегодняшняя поставка уже получена.'
+      reward: { components: supplyReward(player, now), xp: 5 }, completeTitle: 'Поставка принята',
+      enabled: supplyReady(player, now), reason: 'Следующая поставка ещё в пути.'
     },
     terminal_sync: {
       objectId: 'terminal', node: 'lab_terminal', state: 'working', durationMs: 30_000, energy: 6,
@@ -530,18 +926,38 @@ export function resolveSignal(player, signalId, decision, now = new Date()) {
   if (!['study', 'skip'].includes(decision)) throw gameError('INVALID_DECISION', 'Выберите: изучить или пропустить.');
   const signal = player.progression.recon.signals.find(item => item.id === signalId);
   if (!signal) throw gameError('UNKNOWN_SIGNAL', 'Сигнал больше недоступен.');
+  if (signal.source === 'xradar') throw gameError('EXTERNAL_SIGNAL_REQUIRES_RESULT', 'Живой сигнал должен быть подтверждён XRadar.', 502);
   const risk = calculateSignalRisk(signal);
   const safe = risk < 50;
   const correct = decision === 'study' ? safe : !safe;
-  const reward = correct ? { data: 80, components: 1, xp: 18 } : { data: 15, components: 0, xp: 8 };
+  const analysis = player.rooms?.analysis?.level || 0;
+  const interceptor = player.rooms?.interceptor?.level || 0;
+  const rareRandom = seededRandom(`rare:${player.telegramId}:${signal.id}:${player.progression.recon.round}`)();
+  const rareComponent = correct && interceptor > 0 && rareRandom < Math.min(0.45, interceptor * 0.045) ? 1 : 0;
+  const reward = correct
+    ? { data: 80, components: 1 + rareComponent, xp: 18 }
+    : { data: 15 + Math.min(35, analysis * 4), components: 0, xp: 8 };
   applyReward(player, reward);
   updateHeroLevel(player);
   player.stats.reconAttempts += 1;
   if (correct) player.stats.reconCorrect += 1;
+  player.stats.reconHistory.push({ at: new Date(now), correct, risk, decision });
+  player.stats.reconHistory = player.stats.reconHistory.filter(entry => asMs(entry.at) >= asMs(now) - 60 * DAY_MS).slice(-500);
+  player.progression.daily.attempts += 1;
+  player.progression.season.attempts += 1;
+  if (correct) {
+    player.progression.daily.correct += 1;
+    player.progression.season.correct += 1;
+  }
+  if (player.progression.daily.attempts >= 5 && !player.progression.daily.rewardClaimed) {
+    player.progression.daily.rewardClaimed = true;
+    player.resources.components += 5;
+    reward.dailyComponents = 5;
+  }
   const explanation = safe
     ? `Риск ${risk}/100: высокая ликвидность и умеренная концентрация делают сигнал подходящим для изучения.`
     : `Риск ${risk}/100: слабая ликвидность, концентрация держателей или изменяемый контракт требуют осторожности.`;
-  const result = { signalId, decision, correct, safe, risk, reward, explanation, resolvedAt: new Date(now) };
+  const result = { signalId, decision, correct, safe, risk, reward, rareFind: Boolean(rareComponent), explanation, resolvedAt: new Date(now) };
   player.progression.recon.lastResult = result;
   player.progression.recon.signals = player.progression.recon.signals.filter(item => item.id !== signalId);
   player.progression.recon.round += 1;
@@ -553,6 +969,94 @@ export function resolveSignal(player, signalId, decision, now = new Date()) {
     player.progression.recon.nextAt = new Date(asMs(now) + RECON_INTERVAL_MS);
   }
   player.progression.lastCompleted = { id: `signal_${signalId}`, title: correct ? 'Решение подтверждено' : 'Разбор завершён', reward, at: new Date(now) };
+  checkAchievements(player, now);
+  return result;
+}
+
+export function importExternalSignals(player, wave, now = new Date()) {
+  ensurePlayerShape(player, now);
+  requireIdleHero(player);
+  if (!Array.isArray(wave) || wave.length < 1) throw gameError('INVALID_WAVE', 'XRadar не вернул сигналы.');
+  player.progression.recon.signals = wave.slice(0, 8).map((item, index) => {
+    const prices = Array.isArray(item.chart) ? item.chart.map(point => Number(point.p)).filter(Number.isFinite) : [];
+    const liquidity = clamp(Math.round(Math.log10(Math.max(10, Number(item.liquidity || 10))) * 20), 20, 95);
+    const activity = clamp(Math.round(Number(item.buyPressure || 0.5) * 100), 5, 98);
+    const concentration = clamp(Math.round(70 - Math.log10(Math.max(2, Number(item.holders || 2))) * 13), 8, 88);
+    const signal = {
+      id: `live_${String(item.id || index)}`,
+      externalId: String(item.id || ''),
+      source: 'xradar',
+      name: `UNIDENTIFIED-${index + 1}`,
+      activity,
+      liquidity,
+      concentration,
+      mutable: Number(item.riskScore || 0) >= 70,
+      smartWallets: Number(item.smartWallets || 0),
+      riskScore: clamp(Number(item.riskScore ?? calculateSignalRisk({ activity, liquidity, concentration, mutable: false })), 0, 100)
+    };
+    signal.market = {
+      priceSeries: prices.length > 1 ? prices : buildMarketData(signal, seededRandom(`live:${signal.id}`)).priceSeries,
+      price: prices.at(-1) || 0,
+      change24h: prices.length > 1 && prices[0] ? Math.round(((prices.at(-1) / prices[0]) - 1) * 1000) / 10 : 0,
+      liquidityUsd: Number(item.liquidity || 0),
+      volume24hUsd: Number(item.volume24h || 0),
+      holders: Number(item.holders || 0),
+      buys: Math.round(Number(item.buyPressure || 0.5) * 100),
+      sells: Math.round((1 - Number(item.buyPressure || 0.5)) * 100),
+      top10Pct: concentration,
+      lpLocked: Number(item.riskScore || 0) < 65,
+      mintRevoked: Number(item.riskScore || 0) < 70
+    };
+    return signal;
+  });
+  player.progression.recon.source = 'xradar';
+  player.progression.recon.nextAt = new Date(asMs(now) + RECON_INTERVAL_MS);
+  return player.progression.recon.signals;
+}
+
+export function resolveExternalSignal(player, signalId, decision, external, now = new Date()) {
+  ensurePlayerShape(player, now);
+  requireIdleHero(player);
+  if (!['study', 'skip'].includes(decision)) throw gameError('INVALID_DECISION', 'Выберите: изучить или пропустить.');
+  const signal = player.progression.recon.signals.find(item => item.id === signalId && item.source === 'xradar');
+  if (!signal) throw gameError('UNKNOWN_SIGNAL', 'Сигнал больше недоступен.');
+  if (!external || typeof external.correct !== 'boolean') throw gameError('INVALID_WAVE_RESULT', 'XRadar не подтвердил результат.', 502);
+  const correct = external.correct;
+  const reward = correct ? { data: 100, components: 2, xp: 22 } : { data: 20, components: 0, xp: 8 };
+  applyReward(player, reward);
+  updateHeroLevel(player);
+  player.stats.reconAttempts += 1;
+  if (correct) player.stats.reconCorrect += 1;
+  player.stats.reconHistory.push({ at: new Date(now), correct, risk: signal.riskScore, decision, source: 'xradar' });
+  player.stats.reconHistory = player.stats.reconHistory.filter(entry => asMs(entry.at) >= asMs(now) - 60 * DAY_MS).slice(-500);
+  player.progression.daily.attempts += 1;
+  player.progression.season.attempts += 1;
+  if (correct) {
+    player.progression.daily.correct += 1;
+    player.progression.season.correct += 1;
+  }
+  if (player.progression.daily.attempts >= 5 && !player.progression.daily.rewardClaimed) {
+    player.progression.daily.rewardClaimed = true;
+    player.resources.components += 5;
+    reward.dailyComponents = 5;
+  }
+  const result = {
+    signalId,
+    decision,
+    correct,
+    risk: signal.riskScore,
+    reward,
+    source: 'xradar',
+    actualPct: Number(external.actualPct || 0),
+    symbol: String(external.symbol || 'REVEALED'),
+    explanation: correct ? 'Your assessment matched the verified live-market outcome.' : 'The verified market outcome differed from your assessment.',
+    resolvedAt: new Date(now)
+  };
+  player.progression.recon.lastResult = result;
+  player.progression.recon.signals = player.progression.recon.signals.filter(item => item.id !== signalId);
+  player.progression.recon.round += 1;
+  if (!player.progression.recon.signals.length) player.progression.recon.nextAt = new Date(asMs(now) + RECON_INTERVAL_MS);
+  player.progression.lastCompleted = { id: `live_signal_${signalId}`, title: 'Live signal verified', reward, at: new Date(now) };
   return result;
 }
 
@@ -642,12 +1146,31 @@ function createSignals(player, now) {
     const signal = {
       id: `signal_${player.progression?.recon?.round || 0}_${index}`,
       name: ['EMBER', 'NOVA', 'PULSE', 'ORBIT', 'VAULT'][index] || `NODE-${index + 1}`,
-      activity, liquidity, concentration, mutable
+      activity, liquidity, concentration, mutable,
+      smartWallets: Math.max(0, Math.round((activity - 45) / 18 + random() * 2))
     };
     signal.riskScore = calculateSignalRisk(signal);
     signal.market = buildMarketData(signal, random);
     return signal;
   });
+}
+
+function signalView(player, signal) {
+  const analysis = player.rooms?.analysis?.level || 0;
+  const interceptor = player.rooms?.interceptor?.level || 0;
+  const { riskScore, ...visible } = signal;
+  visible.market = { ...(signal.market || {}) };
+  if (analysis < 9) {
+    delete visible.concentration;
+    delete visible.market.top10Pct;
+  }
+  if (analysis < 6) {
+    delete visible.mutable;
+    delete visible.market.mintRevoked;
+  }
+  if (analysis >= 3) visible.riskBand = riskScore < 35 ? 'low' : riskScore < 65 ? 'medium' : 'high';
+  if (interceptor <= 0) delete visible.smartWallets;
+  return visible;
 }
 
 function reconAvailable(player, now) {
@@ -721,11 +1244,17 @@ function highestOpenFloor(player) {
 }
 
 function requireIdleHero(player) {
+  if (player.progression?.incidents?.active) throw gameError('INCIDENT_ACTIVE', 'Сначала устраните тревогу на станции.');
   if (player.hero.job) throw gameError('HERO_BUSY', 'Сначала дождитесь завершения текущей работы.');
 }
 
 export function supplyReady(player, now = new Date()) {
-  return player.progression.supply.lastClaimDay !== dayKey(now);
+  return asMs(now) >= asMs(player.progression.supply.nextAt);
+}
+
+function supplyReward(player, now = new Date()) {
+  const random = seededRandom(`supply:${player.telegramId}:${player.progression.supply.claims}:${dayKey(now)}`);
+  return 2 + Math.floor(random() * 3);
 }
 
 export function acknowledgeReturn(player) {
@@ -738,27 +1267,66 @@ export function publicGameState(player, now = new Date()) {
     const room = player.rooms[id];
     const access = roomAccess(player, id);
     const next = roomCost(player, id);
-    return [id, { ...room, ...ROOM_DEFS[id], unlocked: access.unlocked, lockReason: access.reason, nextUpgrade: next }];
+    const construction = room.construction ? {
+      ...room.construction,
+      remainingMs: Math.max(0, asMs(room.construction.endsAt) - asMs(now)),
+      progress: clamp((asMs(now) - asMs(room.construction.startedAt)) / Math.max(1, room.construction.durationMs), 0, 1)
+    } : null;
+    return [id, { ...room, construction, ...ROOM_DEFS[id], unlocked: access.unlocked, lockReason: access.reason, nextUpgrade: next, maxLevel: 10 }];
   }));
   const heroPoint = NAV_POINTS[player.hero.node] || NAV_POINTS.lab_center;
   const job = player.hero.job ? {
     ...player.hero.job,
     remainingMs: Math.max(0, asMs(player.hero.job.endsAt) - asMs(now))
   } : null;
+  const secondaryJob = player.progression.secondaryJob ? {
+    ...player.progression.secondaryJob,
+    remainingMs: Math.max(0, asMs(player.progression.secondaryJob.endsAt) - asMs(now))
+  } : null;
   const tasks = buildTasks(player, now);
+  const recentHistory = player.stats.reconHistory.filter(entry => asMs(entry.at) >= asMs(now) - 30 * DAY_MS);
+  const recentCorrect = recentHistory.filter(entry => entry.correct).length;
+  const accuracy30 = recentHistory.length ? Math.round(recentCorrect / recentHistory.length * 100) : 0;
+  const conversionTriggers = [
+    (player.rooms.automation?.level || 0) >= 5 ? { id: 'automation', title: 'Your automation system is ready for a live market.', target: 'terminal' } : null,
+    (player.rooms.analysis?.level || 0) >= 6 ? { id: 'analysis', title: 'Run the same safety checks on live tokens.', target: 'terminal' } : null,
+    recentHistory.length >= 5 && accuracy30 >= 60 ? { id: 'accuracy', title: `Your 30-day accuracy is ${accuracy30}%. Test it on live signals.`, target: 'terminal' } : null
+  ].filter(Boolean);
   return {
     schemaVersion: SCHEMA_VERSION,
     serverNow: new Date(now).toISOString(),
-    profile: player.profile,
+    profile: {
+      firstName: player.profile.firstName,
+      username: player.profile.username,
+      appearance: player.profile.appearance,
+      cosmetics: player.profile.cosmetics,
+      referralCode: player.profile.referralCode,
+      referralConnected: Boolean(player.profile.referredBy),
+      referralSettled: Boolean(player.profile.referralSettled),
+      riskFlagged: player.profile.riskFlags.length > 0
+    },
     resources: {
       data: Math.floor(player.resources.data),
       energy: Math.floor(player.resources.energy),
       energyMax: energyMax(player),
       components: Math.floor(player.resources.components),
       productionPerHour: dataProductionPerHour(player),
+      offlineProductionPerHour: offlineDataProductionPerHour(player),
+      offlineCapacityHours: offlineCapacityHours(player, now),
       energyRegenPerHour: energyRegenPerHour(player)
     },
-    hero: { ...player.hero, job, floor: heroPoint.floor, point: { x: heroPoint.x, y: heroPoint.y } },
+    hero: {
+      ...player.hero,
+      job,
+      floor: heroPoint.floor,
+      point: { x: heroPoint.x, y: heroPoint.y },
+      characteristics: {
+        workSpeedPct: Math.round((0.2 + equippedBonus(player, 'workSpeed') + Math.min(0.4, (player.rooms.comms?.level || 0) * 0.04)) * 100),
+        energyCapacity: energyMax(player),
+        analysisLevel: player.rooms.analysis?.level || equippedBonus(player, 'analysis')
+      }
+    },
+    crew: player.crew,
     rooms: roomStates,
     roomOrder: ROOM_ORDER,
     objects: buildObjects(player, now),
@@ -766,13 +1334,19 @@ export function publicGameState(player, now = new Date()) {
     recommendedTask: tasks[0] || null,
     progression: {
       onboarding: player.progression.onboarding,
-      supply: { ...player.progression.supply, ready: supplyReady(player, now) },
+      supply: {
+        ...player.progression.supply,
+        ready: supplyReady(player, now),
+        remainingMs: Math.max(0, asMs(player.progression.supply.nextAt) - asMs(now)),
+        expectedReward: supplyReward(player, now)
+      },
+      streak: player.progression.streak,
       recon: {
         round: player.progression.recon.round,
         nextAt: player.progression.recon.nextAt,
         unlocked: player.progression.onboarding.step === 2 || (player.rooms.antenna?.level || 0) > 0,
         requiresAntenna: player.progression.onboarding.completed && (player.rooms.antenna?.level || 0) === 0,
-        signals: player.progression.recon.signals.map(({ riskScore, ...visible }) => visible),
+        signals: player.progression.recon.signals.map(signal => signalView(player, signal)),
         lastResult: player.progression.recon.lastResult
       },
       inventory: {
@@ -780,10 +1354,35 @@ export function publicGameState(player, now = new Date()) {
         newItem: player.progression.inventory.newItem,
         items: ITEM_DEFS
       },
+      incidents: {
+        ...player.progression.incidents,
+        ready: player.progression.onboarding.completed
+          && !player.progression.incidents.active
+          && asMs(now) >= asMs(player.progression.incidents.nextAt),
+        remainingMs: Math.max(0, asMs(player.progression.incidents.nextAt) - asMs(now))
+      },
+      achievements: {
+        ...player.progression.achievements,
+        definitions: ACHIEVEMENT_DEFS
+      },
+      daily: player.progression.daily,
+      season: {
+        ...player.progression.season,
+        accuracy: player.progression.season.attempts ? Math.round(player.progression.season.correct / player.progression.season.attempts * 100) : 0,
+        daysRemaining: 42 - Math.floor(((asMs(now) - Date.UTC(2026, 0, 1)) % (42 * DAY_MS)) / DAY_MS)
+      },
+      commerce: {
+        subscriptionActive: subscriptionActive(player, now),
+        subscriptionUntil: player.progression.commerce.subscriptionUntil,
+        entitlements: player.progression.commerce.entitlements
+      },
+      secondaryJob,
+      conversionTriggers,
+      referrals: player.progression.referrals,
       returnReport: player.progression.returnReport,
       lastCompleted: player.progression.lastCompleted
     },
-    stats: player.stats,
+    stats: { ...player.stats, accuracy30, attempts30: recentHistory.length, correct30: recentCorrect },
     nav: { current: player.hero.node, accessibleFloors: highestOpenFloor(player) + 1 }
   };
 }

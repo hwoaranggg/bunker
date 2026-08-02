@@ -190,6 +190,13 @@ export function ensurePlayerShape(player, now = new Date()) {
   player.progression.supply ||= { lastClaimDay: null, claims: 0, lastReward: 0, lastClaimedAt: null };
   player.progression.recon ||= { round: 0, signals: [], nextAt: timestamp, lastResult: null };
   player.progression.recon.signals ||= [];
+  // Сигналы, сохранённые до появления рыночной карточки, дополняем на месте:
+  // иначе у игроков, уже начавших смену, экран анализа остался бы пустым.
+  for (const signal of player.progression.recon.signals) {
+    if (signal && !signal.market) {
+      signal.market = buildMarketData(signal, seededRandom(`${signal.id}:market`));
+    }
+  }
   player.progression.inventory ||= { owned: ['field_coat'], newItem: null };
   player.progression.inventory.owned ||= ['field_coat'];
   if (!player.progression.inventory.owned.includes('field_coat')) player.progression.inventory.owned.unshift('field_coat');
@@ -549,6 +556,80 @@ export function resolveSignal(player, signalId, decision, now = new Date()) {
   return result;
 }
 
+/**
+ * Рыночная карточка токена: график, объёмы и цифры.
+ *
+ * ВСЁ ВЫВОДИТСЯ ИЗ ЧЕТЫРЁХ ВИДИМЫХ МЕТРИК — ликвидности, концентрации,
+ * активности и изменяемости контракта. Это принципиально: игрок должен уметь
+ * прочитать риск по графику и цифрам и прийти к тому же выводу, что и формула
+ * calculateSignalRisk. Если бы график был случайным, обучение превратилось бы в
+ * угадывание, а разбор перестал бы что-либо объяснять.
+ *
+ * Ряд детерминирован: одно и то же зерно даёт один и тот же график, поэтому
+ * карточку можно сохранить и показать позже без расхождений.
+ */
+function buildMarketData(signal, random) {
+  const { activity, liquidity, concentration, mutable } = signal;
+
+  const liquidityUsd = Math.round(1_500 * Math.pow(1.045, liquidity) / 10) * 10;
+  const volume24hUsd = Math.round(liquidityUsd * (0.35 + activity / 90) / 10) * 10;
+  const marketCapUsd = Math.round(liquidityUsd * (3.2 + activity / 28) / 100) * 100;
+  // Число держателей должно читаться заодно с концентрацией: чем большая доля
+  // сидит в десяти кошельках, тем меньше круг владельцев вообще.
+  const holders = Math.max(38, Math.round((60 + liquidity * 13) * (1 - concentration / 160)));
+  const ageHours = Math.max(2, Math.round(4 + (100 - activity) * 0.9 + random() * 20));
+  const buyShare = 0.5 + (activity - 50) / 260 - (concentration - 40) / 320;
+  const trades = Math.max(24, Math.round(volume24hUsd / 140));
+  const buys = Math.max(6, Math.round(trades * Math.min(0.86, Math.max(0.16, buyShare))));
+
+  // Форма графика — прямое следствие метрик:
+  //   ликвидность задаёт наклон и гладкость,
+  //   концентрация — вероятность и высоту выброса с последующим сливом,
+  //   изменяемый контракт добавляет провалы.
+  const drift = ((liquidity - 48) / 50) * 0.0075 + ((activity - 50) / 50) * 0.0035;
+  const jitter = (100 - liquidity) / 100 * 0.055 + (mutable ? 0.02 : 0);
+  const pump = Math.max(0, (concentration - 45) / 55);
+
+  const points = 48;
+  const series = [];
+  let price = 0.00035 + random() * 0.0009;
+  for (let i = 0; i < points; i += 1) {
+    const t = i / (points - 1);
+    // Колокол на трети пути: разгон, за которым идёт распродажа.
+    const bell = Math.exp(-Math.pow((t - 0.34) / 0.13, 2));
+    const dump = t > 0.46 ? -pump * 0.055 * (t - 0.46) / 0.54 : 0;
+    const step = drift + pump * 0.05 * bell + dump + (random() - 0.5) * jitter;
+    price = Math.max(0.00002, price * (1 + step));
+    series.push(price);
+  }
+  const volumes = series.map((_, i) => {
+    const t = i / (points - 1);
+    const bell = Math.exp(-Math.pow((t - 0.34) / 0.16, 2));
+    return Math.max(0.08, 0.25 + pump * bell * 0.9 + random() * 0.35);
+  });
+
+  const change24h = Math.round(((series[points - 1] / series[0]) - 1) * 1000) / 10;
+  const fromPeak = Math.round(((series[points - 1] / Math.max(...series)) - 1) * 1000) / 10;
+
+  return {
+    priceSeries: series.map(v => Number(v.toFixed(8))),
+    volumeSeries: volumes.map(v => Number(v.toFixed(3))),
+    price: Number(series[points - 1].toFixed(8)),
+    change24h,
+    fromPeak,
+    liquidityUsd,
+    volume24hUsd,
+    marketCapUsd,
+    holders,
+    ageHours,
+    buys,
+    sells: Math.max(4, trades - buys),
+    top10Pct: concentration,
+    lpLocked: liquidity >= 55 && !mutable,
+    mintRevoked: !mutable
+  };
+}
+
 function createSignals(player, now) {
   const tutorial = !player.progression?.onboarding?.completed && player.progression?.onboarding?.step <= 2;
   const count = tutorial ? 3 : 3 + Math.floor((player.rooms?.antenna?.level || 0) / 2) + equippedBonus(player, 'extraSignal');
@@ -564,6 +645,7 @@ function createSignals(player, now) {
       activity, liquidity, concentration, mutable
     };
     signal.riskScore = calculateSignalRisk(signal);
+    signal.market = buildMarketData(signal, random);
     return signal;
   });
 }

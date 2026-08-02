@@ -162,6 +162,69 @@
   .stat3 b{display:block;color:var(--cyan);font-size:15px}
   .stat3 span{font-size:8px;color:var(--dim)}
 
+  /* ── Разведка: список токенов ─────────────────────────────────────────── */
+  .tok{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px 0;
+    border-top:1px solid #1c2c30}
+  .tok:first-of-type{border-top:0}
+  .tok:active{opacity:.7}
+  .tok-spark{flex:0 0 auto;width:64px;height:22px;opacity:.9}
+  .tok-main{flex:1 1 auto;min-width:0}
+  .tok-main b{display:block;font-size:14px;font-weight:600;letter-spacing:.02em}
+  .tok-sub{display:block;font-size:10.5px;color:var(--dim);margin-top:2px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tok-flags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+  .tok-flags i{font-style:normal;font-size:9px;color:#e8b339;background:rgba(232,179,57,.1);
+    border:1px solid rgba(232,179,57,.24);border-radius:5px;padding:2px 5px}
+  .tok-end{flex:0 0 auto;font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums}
+  .tok-end.up{color:var(--cyan)} .tok-end.down{color:var(--red)}
+
+  /* ── Разбор токена ────────────────────────────────────────────────────── */
+  .tok-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}
+  .tok-price{font-size:26px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+  .tok-meta{font-size:10.5px;color:var(--dim);margin-top:3px}
+  .tok-chg{text-align:right;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tok-chg i{display:block;font-style:normal;font-size:9px;font-weight:400;color:var(--dim);margin-top:2px}
+  .tok-chg.up{color:var(--cyan)} .tok-chg.down{color:var(--red)}
+
+  .chart{margin:2px 0 14px}
+  .chart svg{display:block;width:100%;height:126px}
+  .chart-ax{display:flex;justify-content:space-between;font-size:9px;color:var(--dim);margin-top:5px}
+
+  .alert{border-left:2px solid var(--amber);background:rgba(232,179,57,.07);border-radius:0 8px 8px 0;
+    padding:9px 11px;font-size:11px;line-height:1.5;color:#e2cd9a;margin-bottom:12px}
+
+  .grid4{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:#1c2c30;
+    border:1px solid #1c2c30;border-radius:12px;overflow:hidden;margin-bottom:4px}
+  .cell{background:#0b1315;padding:9px 8px;min-width:0}
+  .cell span{display:block;font-size:8.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+  .cell b{display:block;font-size:12.5px;margin-top:3px;font-variant-numeric:tabular-nums;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cell b.warn{color:var(--amber)}
+
+  .factor{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #1c2c30}
+  .factor:first-of-type{border-top:0}
+  .factor-dot{flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:var(--cyan)}
+  .factor.bad .factor-dot{background:var(--amber)}
+  .factor-main{flex:1 1 auto;min-width:0}
+  .factor-main b{display:block;font-size:12.5px;font-weight:600}
+  .factor-main span{display:block;font-size:10.5px;color:var(--dim);margin-top:1px}
+  .factor-val{flex:0 0 auto;font-size:12px;font-family:var(--mono);color:var(--text-2);
+    font-variant-numeric:tabular-nums}
+  .factor.bad .factor-val{color:var(--amber)}
+
+  /* ── Итог решения ─────────────────────────────────────────────────────── */
+  .score{text-align:center;padding:14px 0 16px}
+  .score-n{font-size:46px;font-weight:700;letter-spacing:-2px;line-height:1;font-variant-numeric:tabular-nums}
+  .score-n i{font-style:normal;font-size:16px;font-weight:500;color:var(--dim);letter-spacing:0}
+  .score-t{font-size:12px;color:var(--text-2);margin-top:7px}
+  .score.good .score-n{color:var(--cyan)} .score.bad .score-n{color:var(--amber)}
+  .verdict{border-radius:12px;padding:11px 13px;margin-bottom:12px;
+    border:1px solid rgba(53,208,186,.3);background:rgba(53,208,186,.06)}
+  .verdict.bad{border-color:rgba(232,179,57,.34);background:rgba(232,179,57,.06)}
+  .verdict b{display:block;font-size:12.5px;margin-bottom:4px;color:var(--cyan)}
+  .verdict.bad b{color:var(--amber)}
+  .verdict span{font-size:11.5px;line-height:1.5;color:var(--text-2)}
+
   /* ── Служебное ────────────────────────────────────────────────────────── */
   .toast{position:absolute;z-index:60;left:50%;top:calc(var(--hud-h) + 10px);max-width:calc(100% - 26px);
     transform:translate(-50%,-14px);opacity:0;pointer-events:none;background:#122022;border:1px solid #34505a;
@@ -1027,6 +1090,10 @@ function wireSheet(){
     b.addEventListener('click',()=>runBuild(b.dataset.build)));
   $('sheetBody').querySelectorAll('[data-signal]').forEach(b=>
     b.addEventListener('click',()=>resolveRecon(b.dataset.signal,b.dataset.decision)));
+  $('sheetBody').querySelectorAll('[data-open-signal]').forEach(b=>
+    b.addEventListener('click',()=>{openSignalSheet(b.dataset.openSignal);haptic()}));
+  $('sheetBody').querySelector('[data-back-recon]')?.addEventListener('click',()=>{openReconSheet();haptic()});
+  $('sheetBody').querySelector('[data-goto-recon]')?.addEventListener('click',()=>{openReconSheet();haptic()});
   $('sheetBody').querySelectorAll('[data-equip]').forEach(b=>
     b.addEventListener('click',()=>equip(b.dataset.equip)));
   $('sheetBody').querySelectorAll('[data-goto]').forEach(b=>
@@ -1073,11 +1140,14 @@ function openTasksSheet(){
       ${rewardChips(t.reward)}</div>
       <button class="ghost" data-goto="${esc(taskRoom(t.target))}" type="button">Показать в бункере</button></div>`;
   });
+  // Ведём прямо в разведку, а не через действие объекта: пока антенна не
+  // построена, у анализатора нет действия, и строка молча не срабатывала бы.
+  const sig=g.progression.recon?.signals?.length||0;
   html+=`<div class="lbl">Разведка</div>
-    <button class="row" data-obj="analyzer" type="button">
+    <button class="row" data-goto-recon type="button">
       <span class="row-ico">${objIcon('analyzer')}</span>
       <span class="row-main"><b>Карта сигналов</b><span>решение строится на видимых признаках</span></span>
-      <span class="row-end">→</span></button>`;
+      <span class="row-end">${sig?fmt(sig)+' шт':'→'}</span></button>`;
   openSheet('Задания','не больше трёх ясных целей',html);
 }
 function taskRoom(target){
@@ -1094,49 +1164,207 @@ function rewardChips(r={}){
   return out.join('');
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   РАЗВЕДКА
+
+   Список сигналов → разбор одного токена. Список намеренно компактный: он
+   нужен, чтобы выбрать, что смотреть, а не чтобы решать. Решение принимается
+   на экране разбора, где есть график и цифры.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const usd=v=>{
+  const n=Number(v||0);
+  if(n>=1e6) return '$'+(n/1e6).toFixed(1).replace('.0','')+'M';
+  if(n>=1e3) return '$'+(n/1e3).toFixed(1).replace('.0','')+'K';
+  return '$'+Math.round(n);
+};
+const pctText=v=>(v>0?'+':'')+Number(v||0).toFixed(1)+'%';
+/* Согласование числительного: «1 держатель», «2 держателя», «5 держателей».
+   Рассогласованная форма читается как небрежность, а экран про точность. */
+function plural(n,one,few,many){
+  const v=Math.abs(Math.round(Number(n)||0))%100, d=v%10;
+  if(v>10&&v<20) return many;
+  if(d>1&&d<5) return few;
+  return d===1?one:many;
+}
+const holdersText=n=>fmt(n)+' '+plural(n,'держатель','держателя','держателей');
+const priceText=v=>{
+  const n=Number(v||0);
+  return '$'+(n<0.001?n.toFixed(6):n.toFixed(4));
+};
+const ageText=h=>h<24?h+' ч':Math.round(h/24)+' дн';
+
+/** Миниграфик для строки списка. */
+function sparkline(series,up){
+  if(!series||series.length<2) return '';
+  const w=64,h=22,min=Math.min(...series),max=Math.max(...series),span=(max-min)||1;
+  const pts=series.map((v,i)=>`${(i/(series.length-1)*w).toFixed(1)},${(h-((v-min)/span)*h).toFixed(1)}`).join(' ');
+  const c=up?'#3ddc97':'#df6b5c';
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="none" aria-hidden="true">
+    <polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+
+/** Большой график цены с объёмами под ним. */
+function priceChart(market){
+  const s=market.priceSeries||[];
+  if(s.length<2) return '<div class="empty">данных о цене нет</div>';
+  const W=320,H=104,VH=22,min=Math.min(...s),max=Math.max(...s),span=(max-min)||1;
+  const x=i=>(i/(s.length-1))*W;
+  const y=v=>H-((v-min)/span)*(H-6)-3;
+  const line=s.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const area=`M0,${H} L${line.split(' ').join(' L')} L${W},${H} Z`;
+  const up=market.change24h>=0;
+  const c=up?'#3ddc97':'#df6b5c';
+  const peakIdx=s.indexOf(max);
+  const vols=market.volumeSeries||[];
+  const vmax=Math.max(...vols,1);
+  const bars=vols.map((v,i)=>{
+    const bh=Math.max(1,(v/vmax)*VH), bw=W/vols.length*0.62;
+    return `<rect x="${(x(i)-bw/2).toFixed(1)}" y="${(H+VH-bh).toFixed(1)}" width="${bw.toFixed(1)}"
+      height="${bh.toFixed(1)}" fill="${c}" opacity=".22"/>`;
+  }).join('');
+  return `<div class="chart">
+    <svg viewBox="0 0 ${W} ${H+VH}" preserveAspectRatio="none" role="img"
+      aria-label="График цены за 24 часа">
+      <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+        <stop stop-color="${c}" stop-opacity=".28"/><stop offset="1" stop-color="${c}" stop-opacity="0"/>
+      </linearGradient></defs>
+      <path d="M0,${H*.25} H${W}M0,${H*.6} H${W}" stroke="#1b2a2d" stroke-width="1" stroke-dasharray="3 4"/>
+      <path d="${area}" fill="url(#cg)"/>
+      <polyline points="${line}" fill="none" stroke="${c}" stroke-width="2"
+        stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      ${bars}
+      <circle cx="${x(peakIdx).toFixed(1)}" cy="${y(max).toFixed(1)}" r="2.6" fill="#e8b339"/>
+      <circle cx="${W}" cy="${y(s[s.length-1]).toFixed(1)}" r="3" fill="${c}"/>
+    </svg>
+    <div class="chart-ax"><span>${priceText(max)} · пик</span><span>24 часа</span><span>${priceText(min)}</span></div>
+  </div>`;
+}
+
 function openReconSheet(){
   const recon=state.game.progression.recon;
-  let html=`<div class="note"><b>Как читать сигналы.</b> Высокая ликвидность упрощает вход и выход.
-    Высокая концентрация означает, что несколько держателей контролируют большую долю.
-    Изменяемый контракт может поменять правила токена.</div>`;
+  let html='';
   if(recon.lastResult){
-    html+=`<div class="card"><h4>${recon.lastResult.correct?'Решение подтверждено':'Полезный разбор'}</h4>
-      <p>${esc(recon.lastResult.explanation)}</p></div>`;
+    const r=recon.lastResult;
+    html+=`<div class="verdict ${r.correct?'good':'bad'}">
+      <b>${r.correct?'Решение подтверждено':'Разбор завершён'}</b>
+      <span>${esc(r.explanation)}</span></div>`;
   }
   if(!recon.unlocked||recon.requiresAntenna){
     html+=`<div class="card"><h4>Разведка не подключена</h4>
-      <p>Постройте антенную комнату — она принимает новые рыночные сигналы.</p>
+      <p>Антенная комната принимает новые рыночные сигналы. Постройте её, чтобы получать сводки.</p>
       <button class="ghost" data-goto="antenna" type="button">Показать слот антенны</button></div>`;
   }else if(!recon.signals.length){
     html+=`<div class="card"><h4>Сигналы собираются</h4>
-      <p>Антенна формирует следующую сводку. Угадывать и делать ставку не требуется.</p></div>`;
+      <p>Антенна формирует следующую сводку. Угадывать и делать ставку не требуется —
+      решение всегда строится на видимых признаках.</p></div>`;
   }else{
-    html+='<div class="lbl">Обнаруженные сигналы</div>';
+    html+=`<div class="lbl">Обнаружено токенов: ${recon.signals.length}</div>`;
     recon.signals.forEach(s=>{
-      const conc=s.concentration>60?'Высокая':s.concentration>35?'Средняя':'Низкая';
-      html+=`<div class="card"><h4>${esc(s.name)}</h4>
-        <div class="metrics">
-          <div class="metric"><span>Активность</span><b>${metricLabel(s.activity)}</b></div>
-          <div class="metric ${s.liquidity<45?'warn':''}"><span>Ликвидность</span><b>${metricLabel(s.liquidity)}</b></div>
-          <div class="metric ${s.concentration>60?'warn':''}"><span>Концентрация</span><b>${conc} · ${s.concentration}%</b></div>
-          <div class="metric ${s.mutable?'warn':''}"><span>Контракт</span><b>${s.mutable?'Изменяем':'Зафиксирован'}</b></div>
-        </div>
-        <div class="two">
-          <button class="ghost" data-signal="${esc(s.id)}" data-decision="skip" type="button">Пропустить</button>
-          <button class="primary" data-signal="${esc(s.id)}" data-decision="study" type="button">Изучить</button>
-        </div></div>`;
+      const m=s.market||{};
+      const up=(m.change24h||0)>=0;
+      const flags=[];
+      if(s.mutable) flags.push('контракт изменяем');
+      if(s.liquidity<45) flags.push('тонкая ликвидность');
+      if(s.concentration>60) flags.push('концентрация');
+      html+=`<button class="tok" data-open-signal="${esc(s.id)}" type="button">
+        <span class="tok-spark">${sparkline(m.priceSeries,up)}</span>
+        <span class="tok-main">
+          <b>${esc(s.name)}</b>
+          <span class="tok-sub">${usd(m.liquidityUsd)} ликвидности · ${holdersText(m.holders)}</span>
+          ${flags.length?`<span class="tok-flags">${flags.map(f=>`<i>${esc(f)}</i>`).join('')}</span>`:''}
+        </span>
+        <span class="tok-end ${up?'up':'down'}">${pctText(m.change24h)}</span>
+      </button>`;
     });
+    html+=`<div class="note" style="margin-top:12px"><b>Как читать.</b> Ликвидность показывает,
+      насколько легко войти и выйти. Концентрация — какую долю держат десять кошельков.
+      Изменяемый контракт означает, что правила токена ещё могут поменять.</div>`;
   }
-  openSheet('Карта сигналов','разведданные',html);
+  openSheet('Разведка','рыночные сигналы',html);
 }
-const metricLabel=v=>v>=70?'Высокая':v>=45?'Средняя':'Низкая';
+
+/** Разбор одного токена: график, цифры, факторы риска, решение. */
+function openSignalSheet(id){
+  const s=state.game.progression.recon.signals.find(x=>x.id===id);
+  if(!s){ openReconSheet(); return }
+  state.sheet={type:'signal',id};
+  const m=s.market||{};
+  const up=(m.change24h||0)>=0;
+  const busy=Boolean(state.game.hero.job);
+
+  // Факторы показываем с направлением и силой, но без итоговой цифры:
+  // точная арифметика раскрывается после решения, иначе разбор превращается
+  // в подстановку чисел в формулу вместо чтения признаков.
+  const factors=[
+    {t:'Ликвидность',v:usd(m.liquidityUsd),bad:s.liquidity<45,
+     n:s.liquidity<45?'тонкая — выйти будет трудно':'достаточная для входа и выхода'},
+    {t:'Топ-10 кошельков',v:s.concentration+'%',bad:s.concentration>60,
+     n:s.concentration>60?'узкий круг может обвалить цену':'владение распределено'},
+    {t:'Контракт',v:s.mutable?'изменяем':'зафиксирован',bad:s.mutable,
+     n:s.mutable?'правила ещё могут поменять':'правила менять нельзя'},
+    {t:'Активность',v:fmt(m.buys)+' / '+fmt(m.sells),bad:(m.sells||0)>(m.buys||0),
+     n:(m.sells||0)>(m.buys||0)?'продаж больше, чем покупок':'покупки преобладают'}
+  ];
+
+  const html=`
+    <div class="tok-head">
+      <div><div class="tok-price">${priceText(m.price)}</div>
+        <div class="tok-meta">возраст ${ageText(m.ageHours)} · ${usd(m.marketCapUsd)} капитализация</div></div>
+      <div class="tok-chg ${up?'up':'down'}">${pctText(m.change24h)}<i>за 24 часа</i></div>
+    </div>
+    ${priceChart(m)}
+    ${m.fromPeak<-8?`<div class="alert">От максимума цена уже ушла на ${Math.abs(m.fromPeak).toFixed(1)}%.
+      Такой профиль обычно означает, что разгон прошёл без вас.</div>`:''}
+    <div class="grid4">
+      <div class="cell"><span>Ликвидность</span><b>${usd(m.liquidityUsd)}</b></div>
+      <div class="cell"><span>Объём 24ч</span><b>${usd(m.volume24hUsd)}</b></div>
+      <div class="cell"><span>Держателей</span><b>${fmt(m.holders)}</b></div>
+      <div class="cell"><span>Топ-10</span><b class="${s.concentration>60?'warn':''}">${s.concentration}%</b></div>
+      <div class="cell"><span>LP</span><b class="${m.lpLocked?'':'warn'}">${m.lpLocked?'заперт':'не заперт'}</b></div>
+      <div class="cell"><span>Право эмиссии</span><b class="${m.mintRevoked?'':'warn'}">${m.mintRevoked?'отозвано':'активно'}</b></div>
+    </div>
+    <div class="lbl">На что смотреть</div>
+    ${factors.map(f=>`<div class="factor ${f.bad?'bad':'ok'}">
+      <span class="factor-dot"></span>
+      <span class="factor-main"><b>${esc(f.t)}</b><span>${esc(f.n)}</span></span>
+      <span class="factor-val">${esc(f.v)}</span></div>`).join('')}
+    <div class="two" style="margin-top:16px">
+      <button class="ghost" data-signal="${esc(s.id)}" data-decision="skip" type="button" ${busy?'disabled':''}>Пропустить</button>
+      <button class="primary" data-signal="${esc(s.id)}" data-decision="study" type="button" ${busy?'disabled':''}>Изучить</button>
+    </div>
+    <div class="xr" style="margin-top:14px"><b>Как это работает в XRadar</b>
+      Те же признаки терминал проверяет автоматически по каждому новому токену
+      и показывает результат до того, как цена двинулась.</div>`;
+  openSheet(s.name,'разбор токена',html);
+}
+
 async function resolveRecon(signalId,decision){
   try{
     const r=await api('/api/game/recon/resolve',{method:'POST',body:{signalId,decision}});
-    setGame(r.game); renderAll(); openReconSheet();
-    notify(r.result.explanation,!r.result.correct);
+    setGame(r.game); renderAll();
+    showVerdict(r.result);
     haptic(r.result.correct?'success':'selection');
   }catch(e){ notify(e.message,true); haptic('error') }
+}
+
+/** Итог решения: здесь уже показываем точную арифметику — на ней и учатся. */
+function showVerdict(res){
+  const risk=Number(res.risk||0);
+  const html=`
+    <div class="score ${res.safe?'good':'bad'}">
+      <div class="score-n">${risk}<i>/100</i></div>
+      <div class="score-t">${res.safe?'Профиль пригоден для изучения':'Профиль требует осторожности'}</div>
+    </div>
+    <div class="verdict ${res.correct?'good':'bad'}">
+      <b>${res.correct?'Решение верное':'Решение неточное'}</b>
+      <span>${esc(res.explanation)}</span></div>
+    <div class="lbl">Что вы получили</div>
+    <div class="chips">${rewardChips(res.reward)}</div>
+    <button class="primary" data-back-recon type="button" style="margin-top:14px">К другим сигналам</button>
+    <div class="xr" style="margin-top:14px"><b>Как это работает в XRadar</b>
+      Терминал считает такой же профиль риска по каждому новому токену Solana и TON,
+      а результат записывает в блокчейн до движения цены.</div>`;
+  openSheet(res.correct?'Разбор подтверждён':'Разбор завершён','итог решения',html);
 }
 
 function openHeroSheet(){
@@ -1207,7 +1435,11 @@ function renderHud(){
   $('componentsValue').textContent=fmt(g.resources.components);
   $('levelValue').textContent=g.hero.level;
   $('xpBar').style.width=`${g.hero.xp%100}%`;
-  $('fabDot').classList.toggle('hidden',!g.progression.recon?.signals?.length);
+  // Точка на кнопке — только когда по сигналам реально есть что делать:
+  // пока антенна не построена, разведка закрыта, и звать в неё незачем.
+  const recon=g.progression.recon;
+  const hasWork=Boolean(recon?.unlocked&&!recon?.requiresAntenna&&recon?.signals?.length);
+  $('fabDot').classList.toggle('hidden',!hasWork);
 }
 function renderWork(){
   const job=state.game.hero.job;

@@ -1,0 +1,23 @@
+{
+  "name": "xradar-bunker-mini-app",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "demo": "node scripts/demo-with-mongo.js",
+    "simulate:onboarding": "node scripts/simulate-first-5-minutes.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "mongodb": "^6.19.0"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^10.2.1"
+  }
+}

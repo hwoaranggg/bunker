@@ -1,0 +1,1293 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#070b0d">
+  <title>Бункер · XRadar</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+  /* ═══════════════════════════════════════════════════════════════════════
+     БУНКЕР — вид сбоку в разрезе.
+
+     Экран принадлежит сцене. Поверх неё лежат только строка ресурсов и две
+     круглые кнопки; всё остальное открывается шторкой снизу и закрывается.
+     Нижней навигации нет намеренно: пять кнопок съедали ту площадь, ради
+     которой игра и существует.
+
+     Вся геометрия сцены живёт в мировых единицах (см. WORLD в скрипте) и
+     попадает на экран одной матрицей камеры. Ни один элемент не пересчитывает
+     свои координаты при зуме — иначе движение камеры дёргалось бы.
+     ═══════════════════════════════════════════════════════════════════════ */
+  :root{
+    --bg:#05080a; --hud:rgba(9,14,16,.82); --line:#22333a;
+    --text:#e8f0ee; --muted:#8fa4a6; --dim:#5d7074;
+    --cyan:#35d0ba; --cyan-dim:rgba(53,208,186,.14);
+    --amber:#e8b339; --amber-dim:rgba(232,179,57,.14);
+    --red:#df6b5c;
+    --hud-h:44px;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020405;color:var(--text);
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
+  button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .hidden{display:none!important}
+
+  .app{position:relative;height:100dvh;max-width:520px;margin:0 auto;overflow:hidden;background:var(--bg)}
+
+  /* ── Вход ─────────────────────────────────────────────────────────────── */
+  .auth{height:100%;display:grid;place-items:center;padding:28px;
+    background:radial-gradient(circle at 50% 28%,#15302f 0,#081012 38%,#030506 78%)}
+  .auth-card{width:min(100%,340px);text-align:center}
+  .auth-mark{width:104px;height:104px;margin:0 auto 22px;border:1px solid #2f4b50;border-radius:50%;
+    display:grid;place-items:center;box-shadow:0 0 50px rgba(53,208,186,.14),inset 0 0 26px rgba(53,208,186,.07)}
+  .auth-mark:before{content:"XR";font:800 28px/1 ui-monospace,monospace;letter-spacing:-3px;color:var(--cyan)}
+  .auth h1{font-size:30px;margin:0 0 8px;letter-spacing:-1px}
+  .auth p{color:var(--muted);line-height:1.55;margin:0 auto 22px;max-width:280px;font-size:14px}
+  .auth small{display:block;color:#63767a;margin-top:14px;font-size:12px}
+  .primary{background:var(--cyan);color:#04100f;border-radius:12px;min-height:46px;padding:0 18px;font-weight:800}
+  .primary:disabled{background:#26363a;color:#6b7c7e;cursor:not-allowed}
+  .ghost{background:#132022;border:1px solid #2b4247;color:var(--text);border-radius:12px;min-height:44px;padding:0 16px;font-weight:600}
+  .danger{background:rgba(223,107,92,.12);border:1px solid rgba(223,107,92,.4);color:#f2a398;border-radius:12px;min-height:44px;padding:0 16px}
+
+  /* ── Игра: сцена занимает весь экран ──────────────────────────────────── */
+  .game{position:absolute;inset:0}
+  .stage{position:absolute;inset:0;overflow:hidden;touch-action:none;
+    background:linear-gradient(180deg,#0a1418 0,#060b0d 45%,#040708 100%)}
+  .stage svg{display:block;width:100%;height:100%}
+
+  /* Строка ресурсов лежит ПОВЕРХ сцены, а не отнимает у неё высоту. */
+  .hud{position:absolute;left:0;right:0;top:0;z-index:20;height:var(--hud-h);
+    display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) 58px;gap:6px;align-items:center;
+    padding:0 8px;background:var(--hud);backdrop-filter:blur(14px);
+    border-bottom:1px solid rgba(53,208,186,.12)}
+  .res{min-width:0;display:flex;align-items:center;gap:6px}
+  .res-ico{width:20px;height:20px;flex:0 0 auto;display:grid;place-items:center;border-radius:6px;
+    background:var(--cyan-dim);color:var(--cyan);font:900 10px/1 ui-monospace,monospace}
+  .res:nth-child(3) .res-ico{background:var(--amber-dim);color:var(--amber)}
+  .res-txt{min-width:0}
+  .res-val{font-size:13px;font-weight:800;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .res-lbl{font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lvl{position:relative;height:30px;border:1px solid #274044;border-radius:9px;display:grid;place-items:center;
+    background:rgba(8,15,17,.7);overflow:hidden}
+  .lvl b{font-size:13px;color:var(--cyan);line-height:1}
+  .lvl i{position:absolute;left:0;bottom:0;height:2px;background:var(--cyan)}
+
+  /* ── Плавающие кнопки ─────────────────────────────────────────────────── */
+  .fabs{position:absolute;right:12px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:18;
+    display:grid;gap:10px}
+  .fab{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;
+    background:rgba(11,18,20,.92);border:1px solid #2c4449;backdrop-filter:blur(10px);
+    box-shadow:0 10px 26px rgba(0,0,0,.5);position:relative}
+  .fab svg{width:23px;height:23px;fill:none;stroke:#bcd0ce;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .fab:active{transform:scale(.94)}
+  .fab .dot{position:absolute;top:5px;right:5px;width:9px;height:9px;border-radius:50%;
+    background:var(--amber);border:2px solid #0b1214}
+
+  /* Подсказка текущей цели — узкая пилюля, не карточка. */
+  .goal{position:absolute;left:10px;right:76px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:17;
+    display:flex;align-items:center;gap:8px;min-height:44px;padding:8px 12px;border-radius:14px;
+    background:rgba(10,16,18,.9);border:1px solid rgba(232,179,57,.34);backdrop-filter:blur(10px);
+    box-shadow:0 10px 26px rgba(0,0,0,.42);text-align:left}
+  .goal small{display:block;color:var(--amber);font-size:8px;text-transform:uppercase;letter-spacing:1px}
+  .goal b{display:block;font-size:12px;font-weight:600;line-height:1.25;
+    overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+
+  /* Полоса текущей работы — над кнопками, тонкая. */
+  .work{position:absolute;left:10px;right:10px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:17;
+    padding:8px 11px;border-radius:12px;background:rgba(10,16,18,.92);border:1px solid #2b4145;
+    backdrop-filter:blur(10px);box-shadow:0 8px 22px rgba(0,0,0,.4)}
+  .work-top{display:flex;justify-content:space-between;gap:10px;font-size:11px;align-items:baseline}
+  .work-top b{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .work-top span{color:var(--amber);font-weight:700;font-variant-numeric:tabular-nums;flex:0 0 auto}
+  .bar{height:3px;background:#1b2a2d;border-radius:3px;margin-top:7px;overflow:hidden}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--amber),#f5d67f);transition:width .5s linear}
+
+  /* ── Шторка ───────────────────────────────────────────────────────────── */
+  .sheet{position:absolute;left:0;right:0;bottom:0;z-index:30;max-height:60dvh;
+    background:linear-gradient(180deg,#0e1719,#0a1113);border-top:1px solid #2b4348;
+    border-radius:20px 20px 0 0;box-shadow:0 -18px 46px rgba(0,0,0,.62);
+    transform:translateY(101%);transition:transform .26s cubic-bezier(.22,1,.36,1);
+    display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom);touch-action:none}
+  .sheet.open{transform:translateY(0)}
+  .sheet-grip{flex:0 0 auto;height:22px;display:grid;place-items:center}
+  .sheet-grip i{width:38px;height:4px;border-radius:3px;background:#31474c}
+  .sheet-head{flex:0 0 auto;display:flex;align-items:flex-start;gap:12px;padding:0 16px 12px}
+  .sheet-head h3{margin:0;font-size:17px;letter-spacing:-.3px;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sheet-head p{margin:3px 0 0;font-size:11px;color:var(--cyan);min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sheet-x{flex:0 0 auto;width:32px;height:32px;border-radius:9px;border:1px solid #2a3c40;
+    background:#111b1d;color:#9db0af;font-size:17px;line-height:1}
+  .sheet-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:0 16px 18px;touch-action:pan-y}
+  .sheet-body::-webkit-scrollbar{width:0}
+  .sheet p.desc{font-size:12.5px;line-height:1.5;color:var(--muted);margin:0 0 12px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  .chip{border:1px solid #2b4145;background:#101a1c;border-radius:8px;padding:5px 8px;font-size:10px;color:#c1cfce}
+  .chip.cost{color:#e9cd85;border-color:#54492c}
+  .chip.gain{color:#8ee0cf;border-color:#255049}
+  .sheet .primary,.sheet .ghost{width:100%}
+  .xr{margin-top:12px;border-left:2px solid var(--cyan);background:rgba(53,208,186,.06);
+    padding:9px 11px;font-size:11px;line-height:1.5;color:#a6bcba;border-radius:0 8px 8px 0}
+  .xr b{color:var(--cyan);display:block;font-size:9px;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+  .row{display:flex;align-items:center;gap:11px;padding:11px 0;border-top:1px solid #1c2c30;text-align:left;width:100%}
+  .row:first-of-type{border-top:0}
+  .row-ico{flex:0 0 auto;width:38px;height:38px;border-radius:10px;background:#111d1f;border:1px solid #27383c;
+    display:grid;place-items:center}
+  .row-ico svg{width:22px;height:22px}
+  .row-main{flex:1 1 auto;min-width:0}
+  .row-main b{display:block;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row-main span{display:block;font-size:10.5px;color:var(--dim);margin-top:2px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row-end{flex:0 0 auto;font-size:10px;color:var(--muted);text-align:right}
+  .row[disabled]{opacity:.42}
+  .lbl{font-size:9px;text-transform:uppercase;letter-spacing:1.1px;color:var(--dim);margin:14px 0 6px}
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0}
+  .metric{background:#0a1214;border:1px solid #1e3033;border-radius:9px;padding:8px}
+  .metric span{display:block;font-size:8px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+  .metric b{font-size:12px}
+  .metric.warn b{color:var(--amber)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .card{border:1px solid #24363a;background:#0c1416;border-radius:13px;padding:12px;margin-bottom:9px}
+  .card h4{margin:0 0 5px;font-size:13px}
+  .card p{margin:0 0 9px;font-size:11px;line-height:1.45;color:var(--muted)}
+  .note{border-left:2px solid #3a4b4f;padding:8px 10px;font-size:11px;line-height:1.5;color:#9fb2b1;margin-bottom:11px}
+  .stat3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+  .stat3 div{background:#0c1416;border:1px solid #24363a;border-radius:11px;padding:10px 4px;text-align:center}
+  .stat3 b{display:block;color:var(--cyan);font-size:15px}
+  .stat3 span{font-size:8px;color:var(--dim)}
+
+  /* ── Служебное ────────────────────────────────────────────────────────── */
+  .toast{position:absolute;z-index:60;left:50%;top:calc(var(--hud-h) + 10px);max-width:calc(100% - 26px);
+    transform:translate(-50%,-14px);opacity:0;pointer-events:none;background:#122022;border:1px solid #34505a;
+    border-radius:11px;padding:10px 13px;font-size:11.5px;line-height:1.4;box-shadow:0 12px 30px rgba(0,0,0,.5);transition:.2s}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast.error{border-color:rgba(223,107,92,.55);color:#ffc0b7}
+  .modal{position:absolute;z-index:70;inset:0;background:rgba(1,3,4,.84);display:grid;place-items:center;
+    padding:20px;backdrop-filter:blur(6px)}
+  .modal-card{width:min(100%,340px);background:#0d1517;border:1px solid #31494d;border-radius:18px;padding:18px;
+    box-shadow:0 22px 60px #000}
+  .modal-card small{color:var(--cyan);text-transform:uppercase;letter-spacing:1px;font-size:9px}
+  .modal-card h2{margin:7px 0;font-size:19px}
+  .modal-card p{font-size:12px;color:var(--muted);line-height:1.55}
+  .modal-card .primary{margin-top:10px}
+
+  /* ── Сцена: классы для SVG ────────────────────────────────────────────── */
+  .tap{cursor:pointer}
+  .pulse{fill:none;stroke:var(--cyan);stroke-width:1.5;vector-effect:non-scaling-stroke;
+    transform-box:fill-box;transform-origin:center;opacity:0}
+  .ready .pulse{opacity:.9;animation:pulse 2.1s ease-out infinite}
+  .attn .pulse{stroke:var(--amber);opacity:.95;animation:pulse 1.7s ease-out infinite}
+  @keyframes pulse{0%{transform:scale(.94);opacity:.85}75%,100%{transform:scale(1.07);opacity:0}}
+  .blink{animation:blink 1.7s ease-in-out infinite}
+  @keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+  .blink2{animation:blink 1.7s ease-in-out .55s infinite}
+  .blink3{animation:blink 1.7s ease-in-out 1.1s infinite}
+  .spin{transform-box:fill-box;transform-origin:center;animation:spin 6s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  @media(prefers-reduced-motion:reduce){
+    *,*:before,*:after{animation-duration:.001ms!important;animation-iteration-count:1!important;
+      transition-duration:.001ms!important}
+  }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <section id="authView" class="auth">
+    <div class="auth-card">
+      <div class="auth-mark"></div>
+      <h1>Бункер</h1>
+      <p>Подземная лаборатория рыночной разведки. Восстановите системы и запустите станцию.</p>
+      <button id="authButton" class="primary hidden" type="button">Запустить локальную смену</button>
+      <small id="authStatus">Подключение к защищённому контуру…</small>
+    </div>
+  </section>
+
+  <section id="gameView" class="game hidden">
+    <div id="stage" class="stage"></div>
+
+    <header class="hud">
+      <div class="res"><div class="res-ico">D</div><div class="res-txt">
+        <div id="dataValue" class="res-val">0</div><div class="res-lbl">данные</div></div></div>
+      <div class="res"><div class="res-ico">⚡</div><div class="res-txt">
+        <div id="energyValue" class="res-val">0/0</div><div class="res-lbl">энергия</div></div></div>
+      <div class="res"><div class="res-ico">C</div><div class="res-txt">
+        <div id="componentsValue" class="res-val">0</div><div class="res-lbl">детали</div></div></div>
+      <div class="lvl"><b id="levelValue">1</b><i id="xpBar"></i></div>
+    </header>
+
+    <div id="workStrip" class="work hidden">
+      <div class="work-top"><b id="workTitle">Работа</b><span id="workTime">0:00</span></div>
+      <div class="bar"><i id="workBar"></i></div>
+    </div>
+
+    <button id="goalPill" class="goal" type="button">
+      <div style="min-width:0"><small>Следующая цель</small><b id="goalText">Восстановить систему</b></div>
+    </button>
+
+    <div class="fabs">
+      <button id="fabTasks" class="fab" type="button" aria-label="Задания и разведка">
+        <svg viewBox="0 0 24 24"><path d="M7 4h13v16H7zM4 7h3M4 12h3M4 17h3M10 9h7M10 13h7M10 17h4"/></svg>
+        <span id="fabDot" class="dot hidden"></span>
+      </button>
+      <button id="fabHero" class="fab" type="button" aria-label="Герой и профиль">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21c.8-5 3-7 7-7s6.2 2 7 7"/></svg>
+      </button>
+    </div>
+
+    <aside id="sheet" class="sheet" aria-live="polite">
+      <div class="sheet-grip"><i></i></div>
+      <div class="sheet-head">
+        <div style="flex:1;min-width:0"><h3 id="sheetTitle">Объект</h3><p id="sheetStatus"></p></div>
+        <button id="sheetClose" class="sheet-x" type="button" aria-label="Закрыть">×</button>
+      </div>
+      <div id="sheetBody" class="sheet-body"></div>
+    </aside>
+
+    <div id="returnModal" class="modal hidden">
+      <div class="modal-card"><small>Сводка станции</small><h2>Пока вас не было</h2>
+        <p id="returnText"></p><button id="returnAccept" class="primary" type="button">Принять данные</button></div>
+    </div>
+    <div id="toast" class="toast"></div>
+  </section>
+</div>
+
+<script>
+(()=>{
+'use strict';
+const tg=window.Telegram?.WebApp;
+const $=id=>document.getElementById(id);
+const SVGNS='http://www.w3.org/2000/svg';
+const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   МИРОВЫЕ ЕДИНИЦЫ.
+
+   Пропорции заданы здесь один раз и больше нигде не дублируются. Герой ровно
+   вдвое ниже комнаты — это и есть тот масштаб, по которому читается всё
+   остальное: монитор ему по грудь, серверная стойка чуть выше головы.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const W={
+  ROOM_W:150, ROOM_H:84,     // одна ячейка сетки
+  SHAFT_W:46,                // шахта лифта слева
+  HERO_H:44,                 // 52% высоты комнаты
+  SURFACE:30,                // полоса поверхности сверху
+  COLS:2,                    // колонок в сетке
+  ROWS:8,                    // глубина сетки: построенное + место для расширения
+  BEDROCK:96,                // порода под последним рядом
+  FLOOR:9                    // толщина пола комнаты, по нему ходит герой
+};
+W.WIDTH=W.SHAFT_W+W.COLS*W.ROOM_W;
+W.HEIGHT=W.SURFACE+W.ROWS*W.ROOM_H+W.BEDROCK;
+const rowY=r=>W.SURFACE+r*W.ROOM_H;
+const colX=c=>W.SHAFT_W+c*W.ROOM_W;
+/* Пол комнаты: линия, по которой стоят ноги героя и низ оборудования. */
+const floorY=r=>rowY(r)+W.ROOM_H-W.FLOOR;
+const SHAFT_CX=W.SHAFT_W/2;
+
+const state={
+  game:null, sheet:null, poll:null, toast:null, allowDevAuth:false, lastCompleted:null,
+  cam:{x:0,y:0,s:1}, zoomClose:1, zoomFar:.5, vw:0, vh:0, ready:false, bound:false, lastTap:0
+};
+
+const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const fmt=v=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(Number(v||0));
+const time=ms=>{const t=Math.max(0,Math.ceil(ms/1000));return `${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`};
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const haptic=t=>{try{if(t==='error')tg?.HapticFeedback?.notificationOccurred('error');
+  else if(t==='success')tg?.HapticFeedback?.notificationOccurred('success');
+  else tg?.HapticFeedback?.impactOccurred('light')}catch{}};
+
+async function api(url,options={}){
+  const r=await fetch(url,{method:options.method||'GET',
+    headers:options.body?{'Content-Type':'application/json'}:undefined,
+    body:options.body?JSON.stringify(options.body):undefined});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok){const e=new Error(data.message||'Запрос не выполнен.');e.status=r.status;e.code=data.error;throw e}
+  return data;
+}
+
+/* ── Сетка: индекс комнаты → ряд и колонка ────────────────────────────────
+   В движке каждая комната лежит на своём этаже 0..7. Раскладываем их по две
+   в ряд — получается сетка 2×4, которая растёт вниз и вширь. Серверную модель
+   это не трогает: этаж остаётся идентификатором комнаты, меняется только то,
+   где она нарисована. */
+const cellOf=i=>({row:Math.floor(i/W.COLS),col:i%W.COLS});
+function roomCell(roomId){
+  const i=state.game.roomOrder.indexOf(roomId);
+  return i<0?null:cellOf(i);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ОБОРУДОВАНИЕ. Каждый тип узнаётся по силуэту без чтения подписи.
+   Все размеры — доли высоты комнаты, поэтому соотношение с героем (44) держится
+   само: монитор 30 (ему по грудь), стойка 54 (чуть выше головы).
+   Координаты — от левого верхнего угла комнаты, низ прижат к полу.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const EQUIP={
+  // Терминал: стойка с экраном и графиком.
+  // Стол с монитором: 30 при герое 44 — экран приходится ему по грудь.
+  lab:(a,lv)=>`
+    <g transform="translate(18 ${W.ROOM_H-W.FLOOR-30})">
+      <rect x="0" y="17" width="34" height="13" rx="2" fill="#16211f" stroke="#3d5a56"/>
+      <rect x="4" y="0" width="26" height="16" rx="2" fill="#0a1614" stroke="${a}" opacity=".9"/>
+      <path d="M7 12l5-6 4 4 5-7 4 5" fill="none" stroke="${a}" stroke-width="1.3"/>
+      <path d="M15 16v3h4v-3" fill="#2b4340"/>
+      <rect x="5" y="22" width="16" height="1.8" rx=".9" fill="#2b4340"/>
+    </g>
+    ${lv>1?`<g transform="translate(62 ${W.ROOM_H-W.FLOOR-36})">
+      <rect x="0" y="0" width="20" height="36" rx="2" fill="#16211f" stroke="#3d5a56"/>
+      <circle cx="10" cy="7" r="2.6" fill="${a}" class="blink"/>
+      <rect x="4" y="14" width="12" height="1.6" fill="#2b4340"/>
+      <rect x="4" y="19" width="12" height="1.6" fill="#2b4340"/>
+      <rect x="4" y="24" width="12" height="1.6" fill="#2b4340"/></g>`:''}`,
+  // Генератор: круглые элементы и полоса заряда.
+  power:(a,lv)=>`
+    <g transform="translate(16 ${W.ROOM_H-W.FLOOR-46})">
+      <rect x="0" y="10" width="46" height="36" rx="4" fill="#1a2422" stroke="#44625d"/>
+      <circle cx="15" cy="26" r="9" fill="#0a1211" stroke="${a}" stroke-width="1.4"/>
+      <path d="M15 19v8l5 4" stroke="${a}" stroke-width="1.6" fill="none"/>
+      <circle cx="34" cy="26" r="6" fill="none" stroke="#4d6b66" class="spin" stroke-dasharray="3 3"/>
+      <rect x="6" y="39" width="34" height="3" rx="1.5" fill="#12201d"/>
+      <rect x="6" y="39" width="${Math.min(34,10+lv*7)}" height="3" rx="1.5" fill="${a}"/>
+      <path d="M4 10l6-8h26l6 8" fill="#223330"/>
+    </g>`,
+  // Хранилище: ряд контейнеров.
+  workshop:(a,lv)=>`
+    <g transform="translate(14 ${W.ROOM_H-W.FLOOR-34})">
+      ${[0,1,2,3].slice(0,2+Math.min(2,lv)).map((i)=>`
+        <rect x="${i*20}" y="${i%2?6:0}" width="17" height="${i%2?28:34}" rx="2"
+          fill="#1d2723" stroke="#4a5f58"/>
+        <rect x="${i*20+3}" y="${(i%2?6:0)+5}" width="11" height="3" rx="1" fill="${a}" opacity=".75"/>`).join('')}
+    </g>`,
+  // Антенна: тарелка, направленная вверх.
+  antenna:(a,lv)=>`
+    <g transform="translate(20 ${W.ROOM_H-W.FLOOR-50})">
+      <path d="M6 50V26" stroke="#4d6b66" stroke-width="3"/>
+      <path d="M-8 26a20 20 0 0 1 28 0z" fill="#1c2a28" stroke="${a}" stroke-width="1.4"/>
+      <circle cx="6" cy="20" r="2.6" fill="${a}" class="blink"/>
+      <path d="M-2 44h16" stroke="#3c5450" stroke-width="2.5"/>
+      ${lv>1?`<path d="M18 14a26 26 0 0 1 6 12" fill="none" stroke="${a}" opacity=".5" stroke-dasharray="2 3"/>`:''}
+    </g>`,
+  // Анализатор: экран с диаграммой.
+  analysis:(a,lv)=>`
+    <g transform="translate(16 ${W.ROOM_H-W.FLOOR-40})">
+      <rect x="0" y="0" width="42" height="30" rx="3" fill="#0d1816" stroke="#44625d"/>
+      <path d="M5 24l7-11 6 7 6-14 6 18" fill="none" stroke="${a}" stroke-width="1.5"/>
+      <circle cx="32" cy="9" r="4" fill="none" stroke="${a}" opacity=".6"/>
+      <path d="M8 34h26M14 30v4M28 30v4" stroke="#3d5450" stroke-width="2"/>
+      ${lv>1?`<rect x="46" y="10" width="8" height="20" rx="2" fill="#16211f" stroke="#3d5a56"/>
+        <circle cx="50" cy="15" r="2" fill="${a}" class="blink2"/>`:''}
+    </g>`,
+  // Автомат: механическая рука над столом.
+  automation:(a,lv)=>`
+    <g transform="translate(16 ${W.ROOM_H-W.FLOOR-52})">
+      <rect x="0" y="40" width="52" height="12" rx="2" fill="#1c2724" stroke="#455f5a"/>
+      <path d="M10 40V20l16-8 12 10" fill="none" stroke="${a}" stroke-width="2.4" stroke-linecap="round"/>
+      <circle cx="10" cy="20" r="3.4" fill="#0c1513" stroke="${a}"/>
+      <circle cx="26" cy="12" r="3" fill="#0c1513" stroke="${a}"/>
+      <path d="M38 22l4 6" stroke="${a}" stroke-width="2.4" stroke-linecap="round"/>
+      ${lv>1?`<rect x="30" y="30" width="18" height="9" rx="2" fill="#16211f" stroke="#3d5a56"/>
+        <circle cx="35" cy="34" r="1.8" fill="${a}" class="blink"/>`:''}
+    </g>`,
+  // Перехватчик: ряд мигающих ламп.
+  interceptor:(a,lv)=>`
+    <g transform="translate(14 ${W.ROOM_H-W.FLOOR-44})">
+      <rect x="0" y="0" width="48" height="44" rx="3" fill="#16201e" stroke="#44625d"/>
+      ${[0,1,2,3,4].map((i)=>`<circle cx="${8+i*8}" cy="9" r="2.6" fill="${a}"
+        class="${['blink','blink2','blink3','blink','blink2'][i]}"/>`).join('')}
+      ${[0,1,2].map(i=>`<rect x="6" y="${18+i*8}" width="${34-i*7}" height="3" rx="1.5" fill="#2c4440"/>`).join('')}
+      ${lv>1?`<rect x="6" y="18" width="20" height="3" rx="1.5" fill="${a}"/>`:''}
+    </g>`,
+  // Узел связи: панель с бегущими индикаторами.
+  comms:(a,lv)=>`
+    <g transform="translate(14 ${W.ROOM_H-W.FLOOR-54})">
+      <rect x="0" y="0" width="30" height="54" rx="3" fill="#16211f" stroke="#44625d"/>
+      ${[0,1,2,3,4,5].map(i=>`<rect x="5" y="${5+i*8}" width="20" height="4" rx="2" fill="#22332f"/>
+        <rect x="5" y="${5+i*8}" width="${6+((i*7)%14)}" height="4" rx="2" fill="${a}"
+          class="${i%3===0?'blink':i%3===1?'blink2':'blink3'}"/>`).join('')}
+      ${lv>1?`<rect x="36" y="14" width="18" height="40" rx="3" fill="#16211f" stroke="#3d5a56"/>
+        <circle cx="45" cy="22" r="2.4" fill="${a}" class="blink3"/>`:''}
+    </g>`
+};
+const ACCENT={lab:'#35d0ba',power:'#e8b339',workshop:'#c08b52',antenna:'#7cb5ae',
+  analysis:'#35d0ba',automation:'#6e9ec8',interceptor:'#df8b7c',comms:'#8ed7c6'};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   СБОРКА СЦЕНЫ. Один SVG, слои строго по порядку:
+   порода → шахта → комнаты → оборудование → герой → эффекты.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function sceneDefs(){return `
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+    <stop stop-color="#16323a"/><stop offset="1" stop-color="#0d1d21"/></linearGradient>
+  <linearGradient id="dirt" x1="0" y1="0" x2="0" y2="1">
+    <stop stop-color="#2a2119"/><stop offset="1" stop-color="#151310"/></linearGradient>
+  <linearGradient id="rock" x1="0" y1="0" x2="0" y2="1">
+    <stop stop-color="#131a1c"/><stop offset="1" stop-color="#080d0e"/></linearGradient>
+  <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+    <stop stop-color="#1b2628"/><stop offset="1" stop-color="#0f1719"/></linearGradient>
+  <linearGradient id="fl" x1="0" y1="0" x2="0" y2="1">
+    <stop stop-color="#3a4744"/><stop offset="1" stop-color="#1d2725"/></linearGradient>
+  <linearGradient id="lamp" x1="0" y1="0" x2="0" y2="1">
+    <stop stop-color="rgba(255,236,180,.16)"/><stop offset="1" stop-color="rgba(255,236,180,0)"/></linearGradient>
+  <pattern id="strata" width="34" height="18" patternUnits="userSpaceOnUse">
+    <path d="M0 9h12M18 3h16M6 15h14" stroke="#1e1a15" stroke-width="1.4" opacity=".55"/></pattern>`;
+}
+
+/** Порода, поверхность и люк входа. */
+function terrainMarkup(){
+  const h=W.HEIGHT;
+  return `
+  <rect x="${-W.WIDTH}" y="${-260}" width="${W.WIDTH*3}" height="${260+W.SURFACE}" fill="url(#sky)"/>
+  <rect x="${-W.WIDTH}" y="${W.SURFACE-14}" width="${W.WIDTH*3}" height="18" fill="url(#dirt)"/>
+  <rect x="${-W.WIDTH}" y="${W.SURFACE}" width="${W.WIDTH*3}" height="${h}" fill="url(#rock)"/>
+  <rect x="${-W.WIDTH}" y="${W.SURFACE}" width="${W.WIDTH*3}" height="${h}" fill="url(#strata)" opacity=".5"/>
+  <path d="M${-W.WIDTH} ${W.SURFACE-14}h${W.WIDTH*3}" stroke="#3b3123" stroke-width="2"/>
+  <g transform="translate(${SHAFT_CX} ${W.SURFACE-14})">
+    <rect x="-17" y="-13" width="34" height="13" rx="2" fill="#243330" stroke="#48635e"/>
+    <path d="M-11 -13v-6h22v6" fill="#1a2523" stroke="#48635e"/>
+    <circle cx="0" cy="-6" r="2.4" fill="#35d0ba" class="blink"/>
+  </g>`;
+}
+
+/** Шахта лифта во всю глубину плюс кабина. */
+function shaftMarkup(rows){
+  const top=W.SURFACE, bottom=rowY(rows);
+  let rails='';
+  for(let r=0;r<rows;r+=1){
+    rails+=`<path d="M4 ${rowY(r)+W.ROOM_H-1}h${W.SHAFT_W-8}" stroke="#22312f" stroke-width="1.5"/>`;
+  }
+  return `
+  <rect x="0" y="${top}" width="${W.SHAFT_W}" height="${bottom-top}" fill="#0b1112"/>
+  <rect x="0" y="${top}" width="${W.SHAFT_W}" height="${bottom-top}" fill="none" stroke="#2c4340"/>
+  <path d="M9 ${top}v${bottom-top}M${W.SHAFT_W-9} ${top}v${bottom-top}" stroke="#20302e" stroke-width="2"/>
+  ${rails}
+  <g id="cabin"><rect x="6" y="0" width="${W.SHAFT_W-12}" height="${W.ROOM_H-W.FLOOR}" rx="2"
+      fill="#162422" stroke="#4d6f69"/>
+    <path d="M${W.SHAFT_W/2} 4v${W.ROOM_H-W.FLOOR-8}" stroke="#2b423e"/>
+    <rect x="9" y="3" width="${W.SHAFT_W-18}" height="3" rx="1.5" fill="#35d0ba" opacity=".55"/></g>`;
+}
+
+/** Одна построенная комната. */
+function roomMarkup(room,cell){
+  const x=colX(cell.col), y=rowY(cell.row), a=ACCENT[room.id]||'#35d0ba';
+  const busy=Boolean(room.construction);
+  const cls=busy?'attn':(state.game.objects.some(o=>o.roomId===room.id&&o.action)?'ready':'');
+  const equip=EQUIP[room.id]?EQUIP[room.id](a,room.level||1):'';
+  return `
+  <g class="tap ${cls}" data-room="${esc(room.id)}" transform="translate(${x} ${y})">
+    <rect width="${W.ROOM_W}" height="${W.ROOM_H}" fill="url(#wall)"/>
+    <rect x="1" y="1" width="${W.ROOM_W-2}" height="${W.ROOM_H-2}" fill="none" stroke="#33474a"/>
+    <path d="M0 ${W.ROOM_H-W.FLOOR}h${W.ROOM_W}" stroke="#4b5c58" stroke-width="1"/>
+    <rect y="${W.ROOM_H-W.FLOOR}" width="${W.ROOM_W}" height="${W.FLOOR}" fill="url(#fl)"/>
+    <path d="M12 6h${W.ROOM_W-24}" stroke="#2a3a3c" stroke-width="2"/>
+    <ellipse cx="${W.ROOM_W*.5}" cy="7" rx="${W.ROOM_W*.34}" ry="15" fill="url(#lamp)"/>
+    ${busy?constructionMarkup(room):equip}
+    <text x="5" y="${W.ROOM_H-W.FLOOR-3}" fill="#6f8785" font-size="6" letter-spacing=".6"
+      style="pointer-events:none">${esc(shortName(room.name))}</text>
+    <g style="pointer-events:none">${levelPips(room.level||0,a)}</g>
+    <rect class="pulse" x="2" y="2" width="${W.ROOM_W-4}" height="${W.ROOM_H-4}" rx="3"/>
+  </g>`;
+}
+
+/** Уровень читается точками в углу, а не только цифрой. */
+function levelPips(level,a){
+  let out='';
+  for(let i=0;i<5;i+=1){
+    out+=`<circle cx="${W.ROOM_W-8-i*6}" cy="7" r="2" fill="${i<level?a:'#26383a'}"/>`;
+  }
+  return out;
+}
+
+function constructionMarkup(room){
+  const job=state.game.hero.job;
+  const total=room.construction?.durationMs||1;
+  const p=job&&job.roomId===room.id?clamp(1-(job.remainingMs||0)/total,0,1):0;
+  const w=(W.ROOM_W-24)*p;
+  return `
+  <g style="pointer-events:none">
+    <path d="M12 ${W.ROOM_H-W.FLOOR}V16h${W.ROOM_W-24}v${W.ROOM_H-W.FLOOR-16}M12 40h${W.ROOM_W-24}M52 16v${W.ROOM_H-W.FLOOR-16}M100 16v${W.ROOM_H-W.FLOOR-16}"
+      fill="none" stroke="#8a7238" stroke-width="2"/>
+    <rect x="12" y="${W.ROOM_H-W.FLOOR-10}" width="${W.ROOM_W-24}" height="4" rx="2" fill="#1d2622"/>
+    <rect x="12" y="${W.ROOM_H-W.FLOOR-10}" width="${w}" height="4" rx="2" fill="#e8b339"/>
+    <text x="${W.ROOM_W/2}" y="30" text-anchor="middle" fill="#e8b339" font-size="8" font-weight="700">
+      МОНТАЖ ${Math.round(p*100)}%</text>
+  </g>`;
+}
+
+/** Свободный слот: пунктир и плюс. Отличается от заблокированного мгновенно. */
+function slotMarkup(room,cell){
+  const x=colX(cell.col), y=rowY(cell.row);
+  return `
+  <g class="tap ready" data-slot="${esc(room.id)}" transform="translate(${x} ${y})">
+    <rect x="4" y="4" width="${W.ROOM_W-8}" height="${W.ROOM_H-8}" rx="4"
+      fill="rgba(53,208,186,.05)" stroke="#35d0ba" stroke-width="1.4" stroke-dasharray="6 5" opacity=".85"/>
+    <g style="pointer-events:none">
+      <path d="M${W.ROOM_W/2-9} ${W.ROOM_H/2-6}h18M${W.ROOM_W/2} ${W.ROOM_H/2-15}v18"
+        stroke="#35d0ba" stroke-width="2.2" stroke-linecap="round"/>
+      <text x="${W.ROOM_W/2}" y="${W.ROOM_H/2+22}" text-anchor="middle" fill="#5fb9ab"
+        font-size="7" letter-spacing="1">СВОБОДНО</text>
+    </g>
+    <rect class="pulse" x="4" y="4" width="${W.ROOM_W-8}" height="${W.ROOM_H-8}" rx="4"/>
+  </g>`;
+}
+
+/** Заблокированный слот: сплошной тёмный прямоугольник с условием. */
+function lockedMarkup(room,cell,reason){
+  const x=colX(cell.col), y=rowY(cell.row);
+  return `
+  <g class="tap" data-locked="${esc(room.id)}" transform="translate(${x} ${y})">
+    <rect x="2" y="2" width="${W.ROOM_W-4}" height="${W.ROOM_H-4}" rx="3" fill="#0a0f10" stroke="#1e2a2c"/>
+    <g style="pointer-events:none" opacity=".72">
+      <path d="M${W.ROOM_W/2-7} ${W.ROOM_H/2-6}h14v11h-14zM${W.ROOM_W/2-4} ${W.ROOM_H/2-6}v-4a4 4 0 0 1 8 0v4"
+        fill="none" stroke="#55686b" stroke-width="1.6"/>
+      <text x="${W.ROOM_W/2}" y="${W.ROOM_H/2+22}" text-anchor="middle" fill="#54686b"
+        font-size="6.5">${esc(clip(reason,26))}</text>
+    </g>
+  </g>`;
+}
+
+/** Порода ниже последнего ряда сетки. */
+function bedrockMarkup(rows){
+  const y=rowY(rows);
+  return `<rect x="${-W.WIDTH}" y="${y}" width="${W.WIDTH*3}" height="${W.BEDROCK+40}" fill="#070b0c"/>
+    <path d="M${-W.WIDTH} ${y}h${W.WIDTH*3}" stroke="#1a2426" stroke-width="2"/>`;
+}
+
+const shortName=n=>clip(String(n||'').toUpperCase(),20);
+function clip(s,max){const v=String(s||'');return v.length>max?v.slice(0,max-1)+'…':v}
+
+/* ── Герой ────────────────────────────────────────────────────────────────
+   Рисуется один раз и дальше только перемещается: пересобирать фигуру на
+   каждом кадре незачем. Архитектура рассчитана на нескольких — все живут в
+   heroes[], у каждого свой узел и своя анимация. */
+function heroShape(id){
+  /* Фигура нарисована в условных единицах и занимает по высоте ровно 43 из них:
+     от пяток (0) до верхней точки причёски (-43), которая выступает над
+     окружностью головы. Нормируем так, чтобы рост стал HERO_H — ровно половина
+     высоты комнаты. Искры вынесены за пределы фигуры: это эффект работы, а не
+     часть человека, и в рост он не входит. */
+  const u=W.HERO_H/43;
+  return `<g class="unit" data-hero="${id}">
+    <ellipse cx="0" cy="0" rx="${9*u}" ry="${2.4*u}" fill="#000" opacity=".45"/>
+    <g class="spark" opacity="0">
+      <path d="M${-7*u} ${-46*u}l${2*u} ${-3*u}M0 ${-47*u}v${-3.4*u}M${7*u} ${-46*u}l${-2*u} ${-3*u}"
+        stroke="#e8b339" stroke-width="${1.4*u}" stroke-linecap="round"/></g>
+    <g class="body"><g class="figure">
+      <g class="legL"><rect x="${-4.6*u}" y="${-15*u}" width="${4*u}" height="${15*u}" rx="${1.6*u}" fill="#1b2b2e"/></g>
+      <g class="legR"><rect x="${.6*u}" y="${-15*u}" width="${4*u}" height="${15*u}" rx="${1.6*u}" fill="#233639"/></g>
+      <rect x="${-6*u}" y="${-31*u}" width="${12*u}" height="${17*u}" rx="${3.4*u}" fill="#2f5457" stroke="#43757a" stroke-width="${.7*u}"/>
+      <rect x="${-6*u}" y="${-24*u}" width="${12*u}" height="${2.4*u}" fill="#1d3a3d" opacity=".8"/>
+      <g class="armL"><rect x="${-8.6*u}" y="${-30*u}" width="${3.2*u}" height="${14*u}" rx="${1.5*u}" fill="#28484b"/></g>
+      <g class="armR"><rect x="${5.4*u}" y="${-30*u}" width="${3.2*u}" height="${14*u}" rx="${1.5*u}" fill="#28484b"/></g>
+      <circle cx="0" cy="${-36*u}" r="${5.4*u}" fill="#d8a884"/>
+      <path d="M${-5.4*u} ${-37.6*u}a${5.4*u} ${5.4*u} 0 0 1 ${10.8*u} 0q${-5.4*u} ${-2.6*u} ${-10.8*u} 0z" fill="#26343a"/>
+      <circle cx="${-2*u}" cy="${-35.6*u}" r="${.8*u}" fill="#1b2226"/>
+      <circle cx="${2*u}" cy="${-35.6*u}" r="${.8*u}" fill="#1b2226"/>
+    </g></g>
+  </g>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   КАМЕРА. Одна матрица на группу вместо пересчёта координат — только так зум
+   и прокрутка остаются плавными.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function applyCam(){
+  const g=$('cam');
+  if(g) g.setAttribute('transform',`translate(${state.cam.x.toFixed(2)} ${state.cam.y.toFixed(2)}) scale(${state.cam.s.toFixed(4)})`);
+}
+function clampCam(){
+  const{s}=state.cam, sw=W.WIDTH*s, sh=W.HEIGHT*s;
+  // По горизонтали: если сцена уже экрана — центрируем, иначе не пускаем за край.
+  if(sw<=state.vw) state.cam.x=(state.vw-sw)/2;
+  else state.cam.x=clamp(state.cam.x,state.vw-sw,0);
+  const top=state.vh*.18;                          // немного неба над люком
+  if(sh<=state.vh-top) state.cam.y=clamp(state.cam.y,top-sh*0,top);
+  else state.cam.y=clamp(state.cam.y,state.vh-sh,top);
+}
+function setZoom(s,cx,cy){
+  if(!Number.isFinite(s)||s<=0) return;          // щипок двумя пальцами в одну точку даёт деление на ноль
+  const prev=state.cam.s, next=clamp(s,Math.max(.05,state.zoomFar*.85),state.zoomClose*1.6);
+  if(Math.abs(next-prev)<1e-4) return;
+  const px=(cx-state.cam.x)/prev, py=(cy-state.cam.y)/prev;
+  state.cam.s=next;
+  state.cam.x=cx-px*next; state.cam.y=cy-py*next;
+  clampCam(); applyCam();
+}
+function measure(){
+  const st=$('stage');
+  const w=st.clientWidth, h=st.clientHeight;
+  // Пока контейнер не разложен (скрытая вкладка, момент смены размера окна),
+  // его высота приходит нулевой. Считать по ней нельзя: обзорный масштаб
+  // становится отрицательным, а следом за ним и сама камера — сцена
+  // схлопывается и зеркалится. В такой момент просто оставляем прошлые числа.
+  if(w<40||h<40) return;
+  state.vw=w; state.vh=h;
+  const svg=st.querySelector('svg');
+  if(svg) svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+  // Крупный план: шахта и обе колонки ровно по ширине экрана.
+  state.zoomClose=Math.max(.05,(w-12)/W.WIDTH);
+  // Обзор: весь бункер целиком, включая породу.
+  state.zoomFar=Math.max(.05,Math.min(state.zoomClose*.55,(h-90)/W.HEIGHT));
+}
+
+/* Первая установка камеры. Вынесена отдельно, потому что первый замер может
+   прийтись на момент, когда контейнер ещё без высоты: тогда камеру ставит
+   ближайший валидный замер (обычно событие resize), а не «никогда». */
+function initCamera(){
+  if(state.ready||state.vh<40) return;
+  state.cam.s=state.zoomClose;
+  state.cam.x=(state.vw-W.WIDTH*state.cam.s)/2;
+  state.cam.y=state.vh*.18;
+  state.ready=true;
+}
+
+/* Прокрутка с инерцией и щипок. Без инерции пролистывание ощущается дёшево. */
+function bindGestures(){
+  /* Навешиваем ровно один раз. Загрузка Mini App может пройти повторно
+     (восстановление сессии, повторный вызов boot), и вторая привязка дала бы
+     два независимых обработчика: двойной тап переключал бы масштаб дважды за
+     одно касание и возвращал его назад — со стороны выглядит как «зум не
+     работает». */
+  if(state.bound) return;
+  state.bound=true;
+  const st=$('stage');
+  const pts=new Map();
+  let last=null, vx=0, vy=0, glide=0, pinch=null, moved=0, downAt=0, tapPt=null;
+
+  const stopGlide=()=>{ if(glide) cancelAnimationFrame(glide); glide=0 };
+
+  st.addEventListener('pointerdown',e=>{
+    try{ st.setPointerCapture(e.pointerId) }catch{}   // не должен ронять обработку жеста
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    stopGlide(); moved=0; downAt=performance.now(); tapPt={x:e.clientX,y:e.clientY};
+    last={x:e.clientX,y:e.clientY,t:performance.now()}; vx=vy=0;
+    if(pts.size===2){
+      const[a,b]=[...pts.values()];
+      pinch={d:Math.hypot(a.x-b.x,a.y-b.y),s:state.cam.s};
+    }
+  });
+
+  st.addEventListener('pointermove',e=>{
+    if(!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size===2&&pinch){
+      const[a,b]=[...pts.values()];
+      const d=Math.hypot(a.x-b.x,a.y-b.y);
+      const r=st.getBoundingClientRect();
+      setZoom(pinch.s*(d/pinch.d),(a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top);
+      moved=99; return;
+    }
+    if(!last) return;
+    const dx=e.clientX-last.x, dy=e.clientY-last.y, dt=Math.max(1,performance.now()-last.t);
+    moved+=Math.abs(dx)+Math.abs(dy);
+    state.cam.x+=dx; state.cam.y+=dy;
+    vx=dx/dt*16; vy=dy/dt*16;
+    last={x:e.clientX,y:e.clientY,t:performance.now()};
+    clampCam(); applyCam();
+  });
+
+  const release=e=>{
+    pts.delete(e.pointerId);
+    if(pts.size<2) pinch=null;
+    if(pts.size) return;
+    // Тап: короткий и без смещения.
+    if(moved<9&&performance.now()-downAt<420&&tapPt){
+      const now=performance.now();
+      // Время последнего касания держим в общем состоянии, а не в замыкании:
+      // так распознавание двойного тапа не зависит от того, сколько раз
+      // навешивались обработчики.
+      if(now-state.lastTap<300){ state.lastTap=0; toggleZoom(tapPt); }
+      else{ state.lastTap=now; handleTap(e.target); }
+      last=null; return;
+    }
+    last=null;
+    if(REDUCED) return;
+    const step=()=>{
+      vx*=.93; vy*=.93;
+      state.cam.x+=vx; state.cam.y+=vy;
+      clampCam(); applyCam();
+      glide=(Math.abs(vx)>.15||Math.abs(vy)>.15)?requestAnimationFrame(step):0;
+    };
+    if(Math.abs(vx)>.4||Math.abs(vy)>.4) glide=requestAnimationFrame(step);
+  };
+  st.addEventListener('pointerup',release);
+  st.addEventListener('pointercancel',release);
+  // Нативное двойное нажатие: браузеры выдают его и для мыши, и для касания.
+  // Держим наравне с ручным распознаванием — на разных клиентах срабатывает то
+  // одно, то другое, а переключение масштаба должно работать везде.
+  st.addEventListener('dblclick',e=>{ e.preventDefault(); toggleZoom({x:e.clientX,y:e.clientY}) });
+  /* При смене размера окна (поворот, разворот Mini App на весь экран) пороги
+     зума пересчитываются. Сам масштаб камеры надо подтянуть в той же пропорции,
+     иначе после поворота сцена останется в приближении от прошлой ширины. */
+  addEventListener('resize',()=>{
+    const prev=state.zoomClose;
+    measure();
+    if(state.ready&&prev>0&&state.zoomClose>0) state.cam.s*=state.zoomClose/prev;
+    initCamera(); clampCam(); applyCam();
+  });
+}
+
+function toggleZoom(pt){
+  const st=$('stage').getBoundingClientRect();
+  const near=state.cam.s>(state.zoomClose+state.zoomFar)/2;
+  setZoom(near?state.zoomFar:state.zoomClose,pt.x-st.left,pt.y-st.top);
+  haptic();
+}
+
+function handleTap(node){
+  const g=node.closest?.('[data-room],[data-slot],[data-locked]');
+  if(!g){ closeSheet(); return }
+  if(g.dataset.room) openRoomSheet(g.dataset.room);
+  else if(g.dataset.slot) openBuildSheet(g.dataset.slot);
+  else if(g.dataset.locked) openLockedSheet(g.dataset.locked);
+  haptic();
+}
+
+/* ── Отрисовка сцены ──────────────────────────────────────────────────────
+   Пересобираем только при изменении состояния. Герой живёт отдельным слоем и
+   двигается через requestAnimationFrame, не трогая остальную разметку. */
+function renderScene(){
+  const g=state.game, order=g.roomOrder;
+  const rowsUsed=Math.ceil(order.length/W.COLS);
+  const rows=Math.max(rowsUsed,Math.min(W.ROWS,rowsUsed+2));
+  let cells='';
+  order.forEach((id,i)=>{
+    const room=g.rooms[id], cell=cellOf(i);
+    if(room.level>0||room.construction) cells+=roomMarkup(room,cell);
+    else if(room.unlocked) cells+=slotMarkup(room,cell);
+    else cells+=lockedMarkup(room,cell,room.lockReason||'пока закрыто');
+  });
+
+  const svg=`<svg xmlns="${SVGNS}" viewBox="0 0 ${state.vw||390} ${state.vh||800}"
+      preserveAspectRatio="xMidYMid slice" role="img" aria-label="Бункер в разрезе">
+    <defs>${sceneDefs()}</defs>
+    <g id="cam">
+      ${terrainMarkup()}
+      ${bedrockMarkup(rows)}
+      ${shaftMarkup(rows)}
+      ${cells}
+      <g id="units">${heroShape('me')}</g>
+    </g>
+  </svg>`;
+  $('stage').innerHTML=svg;
+  measure();
+  initCamera();
+  clampCam(); applyCam();
+  placeUnitsInstantly();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ДВИЖЕНИЕ ГЕРОЯ.
+
+   Между рядами герой не проходит сквозь пол: идёт к шахте, ждёт кабину и
+   едет вместе с ней. Это не украшение — так объясняется задержка, из-за
+   которой он не оказывается у постройки мгновенно.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const unit={x:0,y:0,row:0,face:1,anim:null,phase:0,state:'idle'};
+const cabin={row:0,y:0};
+
+function nodeTarget(node){
+  const g=state.game;
+  const id=String(node||'lab_center');
+  // Узел лифта — герой стоит у шахты.
+  const elevator=/elevator/.test(id);
+  let roomId='lab';
+  if(id.startsWith('lab')) roomId='lab';
+  else{
+    const m=id.match(/^floor_(\d+)_/);
+    if(m){ const f=Number(m[1]); roomId=g.roomOrder.find(r=>g.rooms[r].floor===f)||'lab'; }
+  }
+  const cell=roomCell(roomId)||{row:0,col:0};
+  const y=floorY(cell.row);
+  if(elevator) return {x:SHAFT_CX,y,row:cell.row,atShaft:true};
+  // Внутри комнаты: смещение по назначению узла, чтобы герой не стоял в стене.
+  const base=colX(cell.col);
+  const spot=id.endsWith('_terminal')?.72:id.endsWith('_analyzer')?.55
+    :id.endsWith('_generator')?.3:id.endsWith('_locker')?.86
+    :id.endsWith('_supply')?.18:id.endsWith('_console')?.32:.5;
+  return {x:base+W.ROOM_W*clamp(spot,.12,.88),y,row:cell.row,atShaft:false};
+}
+
+function placeUnitsInstantly(){
+  const t=nodeTarget(state.game?.hero?.node);
+  unit.x=t.x; unit.y=t.y; unit.row=t.row; unit.anim=null;
+  cabin.row=t.row; cabin.y=rowY(t.row);
+  drawUnit(); drawCabin();
+}
+
+function drawUnit(){
+  const g=document.querySelector('[data-hero="me"]');
+  if(!g) return;
+  g.setAttribute('transform',`translate(${unit.x.toFixed(2)} ${unit.y.toFixed(2)}) scale(${unit.face} 1)`);
+  const body=g.querySelector('.body');
+  const spark=g.querySelector('.spark');
+  const walking=unit.state==='walk';
+  const working=unit.state==='work';
+  const tired=unit.state==='tired';
+  if(spark) spark.setAttribute('opacity',working?'1':'0');
+  if(!body) return;
+  if(REDUCED){ body.setAttribute('transform',''); return }
+  if(tired){ body.setAttribute('transform',`translate(0 ${W.HERO_H*.16}) scale(1 .84)`); return }
+  const p=unit.phase;
+  const legL=g.querySelector('.legL'), legR=g.querySelector('.legR');
+  const armL=g.querySelector('.armL'), armR=g.querySelector('.armR');
+  if(walking){
+    const a=Math.sin(p)*22;
+    legL?.setAttribute('transform',`rotate(${a} 0 ${-W.HERO_H*.34})`);
+    legR?.setAttribute('transform',`rotate(${-a} 0 ${-W.HERO_H*.34})`);
+    armL?.setAttribute('transform',`rotate(${-a*.8} 0 ${-W.HERO_H*.66})`);
+    armR?.setAttribute('transform',`rotate(${a*.8} 0 ${-W.HERO_H*.66})`);
+    body.setAttribute('transform',`translate(0 ${Math.abs(Math.sin(p))*-1.1})`);
+  }else if(working){
+    const a=Math.sin(p*2.4)*26;
+    armR?.setAttribute('transform',`rotate(${a-18} 0 ${-W.HERO_H*.66})`);
+    armL?.setAttribute('transform','');
+    legL?.setAttribute('transform',''); legR?.setAttribute('transform','');
+    body.setAttribute('transform','');
+  }else{
+    legL?.setAttribute('transform',''); legR?.setAttribute('transform','');
+    armL?.setAttribute('transform',''); armR?.setAttribute('transform','');
+    body.setAttribute('transform',`scale(1 ${1+Math.sin(p*.6)*.012})`);
+  }
+}
+function drawCabin(){
+  const c=$('cabin');
+  if(c) c.setAttribute('transform',`translate(0 ${cabin.y.toFixed(2)})`);
+}
+
+/** Составить маршрут: шаг по этажу → лифт → шаг по этажу. */
+function routeTo(node){
+  const t=nodeTarget(node);
+  if(unit.row===t.row) return [{k:'walk',x:t.x}];
+  return [
+    {k:'walk',x:SHAFT_CX},
+    {k:'call',row:t.row},
+    {k:'ride',row:t.row},
+    {k:'walk',x:t.x}
+  ];
+}
+function startRoute(node){
+  const steps=routeTo(node);
+  if(REDUCED){ placeUnitsInstantly(); return }
+  unit.anim={steps,i:0,t0:performance.now(),from:null};
+  pumpAnim();
+}
+let animRaf=0;
+function pumpAnim(){
+  if(animRaf) return;
+  const tick=now=>{
+    animRaf=0;
+    const a=unit.anim;
+    unit.phase+=.16;
+    if(!a){
+      unit.state=state.game?.hero?.job?'work':(state.game?.resources?.energy<=0?'tired':'idle');
+      drawUnit();
+      if(!REDUCED) animRaf=requestAnimationFrame(tick);
+      return;
+    }
+    const step=a.steps[a.i];
+    if(!step){ unit.anim=null; drawUnit(); animRaf=requestAnimationFrame(tick); return }
+    if(a.from===null){ a.from={x:unit.x,y:unit.y,row:unit.row,cy:cabin.y}; a.t0=now }
+    const el=now-a.t0;
+    if(step.k==='walk'){
+      unit.state='walk';
+      const dist=Math.abs(step.x-a.from.x), dur=Math.max(160,dist/0.085);
+      const p=clamp(el/dur,0,1);
+      unit.face=step.x>=a.from.x?1:-1;
+      unit.x=a.from.x+(step.x-a.from.x)*p;
+      if(p>=1){ a.i++; a.from=null }
+    }else if(step.k==='call'){
+      unit.state='idle';
+      const target=rowY(step.row===undefined?unit.row:cabin.row);
+      // Кабина едет к герою.
+      const want=rowY(unit.row), dur=Math.max(180,Math.abs(want-a.from.cy)/0.12);
+      const p=clamp(el/dur,0,1);
+      cabin.y=a.from.cy+(want-a.from.cy)*p;
+      drawCabin();
+      if(p>=1){ a.i++; a.from=null }
+    }else if(step.k==='ride'){
+      unit.state='idle';
+      const fromY=a.from.y, toY=floorY(step.row);
+      const dur=Math.max(260,Math.abs(toY-fromY)/0.1);
+      const p=clamp(el/dur,0,1);
+      unit.y=fromY+(toY-fromY)*p;
+      cabin.y=rowY(a.from.row)+(rowY(step.row)-rowY(a.from.row))*p;
+      drawCabin();
+      if(p>=1){ unit.row=step.row; a.i++; a.from=null }
+    }
+    drawUnit();
+    animRaf=requestAnimationFrame(tick);
+  };
+  animRaf=requestAnimationFrame(tick);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ШТОРКА
+   ═══════════════════════════════════════════════════════════════════════════ */
+function openSheet(title,status,html){
+  $('sheetTitle').textContent=title;
+  $('sheetStatus').textContent=status||'';
+  $('sheetBody').innerHTML=html;
+  $('sheet').classList.add('open');
+  wireSheet();
+}
+function closeSheet(){ $('sheet').classList.remove('open'); state.sheet=null }
+
+function costChips(a){
+  const out=[];
+  if(a?.cost?.data)out.push(`<span class="chip cost">−${fmt(a.cost.data)} D</span>`);
+  if(a?.cost?.components)out.push(`<span class="chip cost">−${fmt(a.cost.components)} C</span>`);
+  if(a?.cost?.energy)out.push(`<span class="chip cost">−${fmt(a.cost.energy)} энергии</span>`);
+  if(a?.durationMs)out.push(`<span class="chip">${time(a.durationMs)}</span>`);
+  if(a?.reward?.data)out.push(`<span class="chip gain">+${fmt(a.reward.data)} D</span>`);
+  if(a?.reward?.components)out.push(`<span class="chip gain">+${fmt(a.reward.components)} C</span>`);
+  if(a?.reward?.xp)out.push(`<span class="chip gain">+${fmt(a.reward.xp)} опыта</span>`);
+  if(a?.reason)out.push(`<span class="chip cost">${esc(a.reason)}</span>`);
+  return out.join('');
+}
+
+function openRoomSheet(roomId){
+  state.sheet={type:'room',roomId};
+  const g=state.game, room=g.rooms[roomId];
+  const objects=g.objects.filter(o=>o.roomId===roomId);
+  const up=room.nextUpgrade;
+  const busy=Boolean(g.hero.job);
+  let html=`<p class="desc">${esc(room.short)}</p>`;
+  html+=`<div class="chips"><span class="chip">уровень ${room.level}</span>
+    ${room.construction?'<span class="chip cost">идёт монтаж</span>':''}</div>`;
+  html+=`<div class="note">${esc(room.effect)}</div>`;
+  if(objects.length){
+    html+=`<div class="lbl">Оборудование</div>`;
+    objects.forEach(o=>{
+      const act=o.action;
+      html+=`<button class="row" data-obj="${esc(o.id)}" ${act?'':'disabled'} type="button">
+        <span class="row-ico">${objIcon(o.id)}</span>
+        <span class="row-main"><b>${esc(o.name)}</b><span>${esc(o.status)}</span></span>
+        <span class="row-end">${act?esc(clip(act.label,14)):'—'}</span></button>`;
+    });
+  }
+  if(up&&room.level>0){
+    html+=`<div class="lbl">Улучшение до уровня ${up.level}</div>
+      <div class="chips">${costChips({cost:up,durationMs:up.durationMs})}</div>
+      <button class="primary" data-build="${esc(roomId)}" type="button" ${busy?'disabled':''}>
+        ${busy?'Идёт другая работа':'Улучшить помещение'}</button>`;
+  }
+  html+=`<div class="xr"><b>Связь с XRadar</b>${esc(room.xradar)}</div>`;
+  openSheet(room.name,`уровень ${room.level} · ряд ${roomCell(roomId).row+1}`,html);
+}
+
+function openBuildSheet(roomId){
+  state.sheet={type:'build',roomId};
+  const g=state.game, room=g.rooms[roomId], cost=room.nextUpgrade;
+  const busy=Boolean(g.hero.job);
+  const html=`<p class="desc">${esc(room.short)}</p>
+    <div class="note">${esc(room.effect)}</div>
+    <div class="lbl">Стоимость постройки</div>
+    <div class="chips">${cost?costChips({cost,durationMs:cost.durationMs}):'<span class="chip">нет данных</span>'}</div>
+    <button class="primary" data-build="${esc(roomId)}" type="button" ${busy||!cost?'disabled':''}>
+      ${busy?'Идёт другая работа':'Построить помещение'}</button>
+    <div class="xr"><b>Связь с XRadar</b>${esc(room.xradar)}</div>`;
+  openSheet(room.name,'свободный слот',html);
+}
+
+function openLockedSheet(roomId){
+  state.sheet={type:'locked',roomId};
+  const room=state.game.rooms[roomId];
+  openSheet(room.name,'закрыто',`
+    <p class="desc">${esc(room.short)}</p>
+    <div class="note">${esc(room.lockReason||'Помещение откроется позже.')}</div>
+    <div class="xr"><b>Связь с XRadar</b>${esc(room.xradar)}</div>`);
+}
+
+function objIcon(id){
+  const s='fill="none" stroke="#8fb8b2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"';
+  const map={
+    terminal:`<rect x="4" y="5" width="16" height="11" rx="1.5" ${s}/><path d="M9 20h6M12 16v4" ${s}/>`,
+    analyzer:`<path d="M5 17l4-6 3 4 4-8 3 10" ${s}/><rect x="3" y="3" width="18" height="18" rx="2" ${s}/>`,
+    generator:`<circle cx="12" cy="12" r="7" ${s}/><path d="M12 8v4l3 2" ${s}/>`,
+    locker:`<rect x="5" y="3" width="14" height="18" rx="2" ${s}/><path d="M12 3v18M9 11h.01M15 11h.01" ${s}/>`,
+    supply:`<path d="M4 8l8-4 8 4v8l-8 4-8-4z" ${s}/><path d="M4 8l8 4 8-4M12 12v8" ${s}/>`,
+    elevator:`<rect x="5" y="3" width="14" height="18" rx="2" ${s}/><path d="M12 7l-2 3h4zM12 17l-2-3h4z" ${s}/>`
+  };
+  return `<svg viewBox="0 0 24 24">${map[id]||map.terminal}</svg>`;
+}
+
+function wireSheet(){
+  $('sheetBody').querySelectorAll('[data-obj]').forEach(b=>
+    b.addEventListener('click',()=>runObject(b.dataset.obj)));
+  $('sheetBody').querySelectorAll('[data-build]').forEach(b=>
+    b.addEventListener('click',()=>runBuild(b.dataset.build)));
+  $('sheetBody').querySelectorAll('[data-signal]').forEach(b=>
+    b.addEventListener('click',()=>resolveRecon(b.dataset.signal,b.dataset.decision)));
+  $('sheetBody').querySelectorAll('[data-equip]').forEach(b=>
+    b.addEventListener('click',()=>equip(b.dataset.equip)));
+  $('sheetBody').querySelectorAll('[data-goto]').forEach(b=>
+    b.addEventListener('click',()=>focusRoom(b.dataset.goto)));
+  $('sheetBody').querySelector('[data-reset]')?.addEventListener('click',resetGame);
+}
+
+async function runObject(id){
+  const o=state.game.objects.find(x=>x.id===id), a=o?.action;
+  if(!a) return;
+  if(a.type==='navigate'){ a.target==='map'?openReconSheet():openHeroSheet(); return }
+  try{
+    const r=a.type==='build'
+      ? await api('/api/game/build',{method:'POST',body:{roomId:a.roomId}})
+      : await api('/api/game/action/start',{method:'POST',body:{actionId:a.id}});
+    setGame(r.game); closeSheet(); renderAll(); haptic('success');
+    startRoute(state.game.hero.node);
+  }catch(e){ notify(e.message,true); haptic('error') }
+}
+async function runBuild(roomId){
+  try{
+    const r=await api('/api/game/build',{method:'POST',body:{roomId}});
+    setGame(r.game); closeSheet(); renderAll(); haptic('success');
+    focusRoom(roomId); startRoute(state.game.hero.node);
+  }catch(e){ notify(e.message,true); haptic('error') }
+}
+
+/* Подвести камеру к комнате, не меняя масштаб. */
+function focusRoom(roomId){
+  const cell=roomCell(roomId); if(!cell) return;
+  const s=state.cam.s;
+  state.cam.x=state.vw/2-(colX(cell.col)+W.ROOM_W/2)*s;
+  state.cam.y=state.vh/2-(rowY(cell.row)+W.ROOM_H/2)*s;
+  clampCam(); applyCam();
+}
+
+/* ── Шторки плавающих кнопок ──────────────────────────────────────────── */
+function openTasksSheet(){
+  const g=state.game;
+  let html='<div class="lbl">Текущие цели</div>';
+  g.tasks.forEach((t,i)=>{
+    html+=`<div class="card"><h4>${esc(t.title)}</h4><p>${esc(t.description)}</p>
+      <div class="chips">${i===0?'<span class="chip gain">рекомендуется</span>':''}
+      ${rewardChips(t.reward)}</div>
+      <button class="ghost" data-goto="${esc(taskRoom(t.target))}" type="button">Показать в бункере</button></div>`;
+  });
+  html+=`<div class="lbl">Разведка</div>
+    <button class="row" data-obj="analyzer" type="button">
+      <span class="row-ico">${objIcon('analyzer')}</span>
+      <span class="row-main"><b>Карта сигналов</b><span>решение строится на видимых признаках</span></span>
+      <span class="row-end">→</span></button>`;
+  openSheet('Задания','не больше трёх ясных целей',html);
+}
+function taskRoom(target){
+  if(!target||target==='bunker'||target==='map') return 'lab';
+  const o=state.game.objects.find(x=>x.id===target);
+  return o?o.roomId:(state.game.rooms[target]?target:'lab');
+}
+function rewardChips(r={}){
+  const out=[];
+  if(r.data)out.push(`<span class="chip gain">+${fmt(r.data)} данных</span>`);
+  if(r.components)out.push(`<span class="chip gain">+${fmt(r.components)} деталей</span>`);
+  if(r.energy)out.push(`<span class="chip gain">+${fmt(r.energy)} энергии</span>`);
+  if(r.xp)out.push(`<span class="chip gain">+${fmt(r.xp)} опыта</span>`);
+  return out.join('');
+}
+
+function openReconSheet(){
+  const recon=state.game.progression.recon;
+  let html=`<div class="note"><b>Как читать сигналы.</b> Высокая ликвидность упрощает вход и выход.
+    Высокая концентрация означает, что несколько держателей контролируют большую долю.
+    Изменяемый контракт может поменять правила токена.</div>`;
+  if(recon.lastResult){
+    html+=`<div class="card"><h4>${recon.lastResult.correct?'Решение подтверждено':'Полезный разбор'}</h4>
+      <p>${esc(recon.lastResult.explanation)}</p></div>`;
+  }
+  if(!recon.unlocked||recon.requiresAntenna){
+    html+=`<div class="card"><h4>Разведка не подключена</h4>
+      <p>Постройте антенную комнату — она принимает новые рыночные сигналы.</p>
+      <button class="ghost" data-goto="antenna" type="button">Показать слот антенны</button></div>`;
+  }else if(!recon.signals.length){
+    html+=`<div class="card"><h4>Сигналы собираются</h4>
+      <p>Антенна формирует следующую сводку. Угадывать и делать ставку не требуется.</p></div>`;
+  }else{
+    html+='<div class="lbl">Обнаруженные сигналы</div>';
+    recon.signals.forEach(s=>{
+      const conc=s.concentration>60?'Высокая':s.concentration>35?'Средняя':'Низкая';
+      html+=`<div class="card"><h4>${esc(s.name)}</h4>
+        <div class="metrics">
+          <div class="metric"><span>Активность</span><b>${metricLabel(s.activity)}</b></div>
+          <div class="metric ${s.liquidity<45?'warn':''}"><span>Ликвидность</span><b>${metricLabel(s.liquidity)}</b></div>
+          <div class="metric ${s.concentration>60?'warn':''}"><span>Концентрация</span><b>${conc} · ${s.concentration}%</b></div>
+          <div class="metric ${s.mutable?'warn':''}"><span>Контракт</span><b>${s.mutable?'Изменяем':'Зафиксирован'}</b></div>
+        </div>
+        <div class="two">
+          <button class="ghost" data-signal="${esc(s.id)}" data-decision="skip" type="button">Пропустить</button>
+          <button class="primary" data-signal="${esc(s.id)}" data-decision="study" type="button">Изучить</button>
+        </div></div>`;
+    });
+  }
+  openSheet('Карта сигналов','разведданные',html);
+}
+const metricLabel=v=>v>=70?'Высокая':v>=45?'Средняя':'Низкая';
+async function resolveRecon(signalId,decision){
+  try{
+    const r=await api('/api/game/recon/resolve',{method:'POST',body:{signalId,decision}});
+    setGame(r.game); renderAll(); openReconSheet();
+    notify(r.result.explanation,!r.result.correct);
+    haptic(r.result.correct?'success':'selection');
+  }catch(e){ notify(e.message,true); haptic('error') }
+}
+
+function openHeroSheet(){
+  const g=state.game, inv=g.progression.inventory, outfit=g.hero.outfit;
+  const acc=g.stats.reconAttempts?Math.round(g.stats.reconCorrect/g.stats.reconAttempts*100):0;
+  const speed=Object.values(outfit).filter(Boolean).length>1?5:0;
+  let html=`<div class="stat3">
+      <div><b>+${speed}%</b><span>скорость работы</span></div>
+      <div><b>${g.resources.energyMax}</b><span>запас энергии</span></div>
+      <div><b>${acc}%</b><span>точность анализа</span></div>
+    </div>
+    <div class="note">${g.hero.job?'Инженер выполняет работу.':'Инженер готов к задаче.'}
+    Экипировка видна на герое в бункере и меняет конкретные возможности.</div>
+    <div class="lbl">Экипировка</div>`;
+  Object.entries(inv.items).forEach(([id,item])=>{
+    const owned=inv.owned.includes(id), on=Object.values(outfit).includes(id);
+    html+=`<button class="row" data-equip="${esc(id)}" ${owned?'':'disabled'} type="button">
+      <span class="row-ico">${objIcon('locker')}</span>
+      <span class="row-main"><b>${esc(item.name)}</b><span>${esc(item.effect)}</span></span>
+      <span class="row-end">${owned?(on?'надето':'надеть'):'не найдено'}</span></button>`;
+  });
+  if(state.allowDevAuth) html+=`<button class="danger" data-reset style="width:100%;margin-top:14px" type="button">
+    Сбросить локальный прогресс</button>`;
+  openSheet(esc(g.profile.firstName),`инженер-аналитик · уровень ${g.hero.level}`,html);
+}
+async function equip(itemId){
+  try{ const r=await api('/api/game/inventory/equip',{method:'POST',body:{itemId}});
+    setGame(r.game); renderAll(); openHeroSheet(); haptic('selection') }
+  catch(e){ notify(e.message,true) }
+}
+async function resetGame(){
+  if(!confirm('Начать локальную смену заново?')) return;
+  try{ const r=await api('/api/dev/reset',{method:'POST',body:{}});
+    state.lastCompleted=null; setGame(r.game); state.ready=false; closeSheet(); renderAll();
+    notify('Новая смена началась.') }
+  catch(e){ notify(e.message,true) }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   СОСТОЯНИЕ И ЦИКЛ
+   ═══════════════════════════════════════════════════════════════════════════ */
+function setGame(game){
+  const prevNode=state.game?.hero?.node;
+  const prevDone=state.game?.progression?.lastCompleted?.id;
+  state.game=game;
+  const done=game.progression.lastCompleted;
+  if(done?.id&&done.id!==prevDone&&done.id!==state.lastCompleted){
+    state.lastCompleted=done.id; notify(done.title); haptic('success');
+  }
+  if(prevNode&&prevNode!==game.hero.node&&state.ready) startRoute(game.hero.node);
+  schedulePoll();
+}
+function schedulePoll(){
+  clearTimeout(state.poll);
+  state.poll=setTimeout(()=>refreshGame().catch(()=>{}),state.game?.hero?.job?900:20000);
+}
+async function refreshGame(){ const r=await api('/api/game'); setGame(r.game); renderAll() }
+
+function renderAll(){
+  if(!state.game) return;
+  renderHud(); renderScene(); renderWork(); renderGoal(); renderReturn();
+  if(state.sheet?.type==='room') openRoomSheet(state.sheet.roomId);
+}
+function renderHud(){
+  const g=state.game;
+  $('dataValue').textContent=fmt(g.resources.data);
+  $('energyValue').textContent=`${g.resources.energy}/${g.resources.energyMax}`;
+  $('componentsValue').textContent=fmt(g.resources.components);
+  $('levelValue').textContent=g.hero.level;
+  $('xpBar').style.width=`${g.hero.xp%100}%`;
+  $('fabDot').classList.toggle('hidden',!g.progression.recon?.signals?.length);
+}
+function renderWork(){
+  const job=state.game.hero.job;
+  $('workStrip').classList.toggle('hidden',!job);
+  $('goalPill').classList.toggle('hidden',Boolean(job));
+  if(!job) return;
+  const total=job.durationMs||1, left=job.remainingMs||0;
+  $('workTitle').textContent=job.completeTitle||'Работа';
+  $('workTime').textContent=time(left);
+  $('workBar').style.width=`${clamp((1-left/total)*100,2,100)}%`;
+}
+function renderGoal(){
+  const t=state.game.recommendedTask;
+  $('goalText').textContent=t?.title||'Все системы работают';
+}
+function renderReturn(){
+  const r=state.game.progression.returnReport;
+  const show=r&&r.data>=1&&!state.game.hero.job;
+  $('returnModal').classList.toggle('hidden',!show);
+  if(show) $('returnText').textContent=
+    `Лаборатория собрала ${fmt(r.data)} данных за ${Math.max(1,Math.round(r.hours*10)/10)} ч. `+
+    'Источник: работающий терминал и подключённые системы.';
+}
+function notify(msg,error=false){
+  clearTimeout(state.toast);
+  $('toast').textContent=msg;
+  $('toast').classList.toggle('error',error);
+  $('toast').classList.add('show');
+  state.toast=setTimeout(()=>$('toast').classList.remove('show'),error?4500:3200);
+}
+
+async function enterGame(){
+  const r=await api('/api/game');
+  state.game=r.game;
+  $('authView').classList.add('hidden');
+  $('gameView').classList.remove('hidden');
+  measure(); renderAll(); bindGestures(); pumpAnim();
+  schedulePoll();
+  tg?.ready(); tg?.expand();
+}
+async function authenticate(body){ await api('/api/auth/telegram',{method:'POST',body}); await enterGame() }
+
+async function boot(){
+  tg?.setHeaderColor?.('#0b1214'); tg?.setBackgroundColor?.('#05080a');
+  try{
+    const cfg=await api('/api/config');
+    state.allowDevAuth=cfg.allowDevAuth;
+    try{ await enterGame(); return }catch(e){ if(e.status!==401) throw e }
+    if(tg?.initData) await authenticate({initData:tg.initData});
+    else if(cfg.allowDevAuth){ $('authButton').classList.remove('hidden');
+      $('authStatus').textContent='Локальный контур готов.' }
+    else $('authStatus').textContent='Откройте Mini App из Telegram.';
+  }catch(e){ $('authStatus').textContent=e.message }
+}
+
+$('authButton').addEventListener('click',()=>authenticate({dev:true})
+  .catch(e=>{$('authStatus').textContent=e.message}));
+$('sheetClose').addEventListener('click',closeSheet);
+$('fabTasks').addEventListener('click',()=>{openTasksSheet();haptic()});
+$('fabHero').addEventListener('click',()=>{openHeroSheet();haptic()});
+$('goalPill').addEventListener('click',()=>{
+  const t=state.game?.recommendedTask;
+  if(!t) return;
+  if(t.target==='map'){ openReconSheet(); return }
+  const room=taskRoom(t.target);
+  focusRoom(room); openRoomSheet(room);
+});
+$('returnAccept').addEventListener('click',async()=>{
+  try{ const r=await api('/api/game/report/ack',{method:'POST',body:{}}); setGame(r.game); renderAll() }
+  catch(e){ notify(e.message,true) }
+});
+/* Свайп вниз по шторке закрывает её. */
+(()=>{
+  const sh=$('sheet'); let y0=null;
+  sh.addEventListener('pointerdown',e=>{ if(e.target.closest('.sheet-body')) return; y0=e.clientY });
+  sh.addEventListener('pointerup',e=>{ if(y0!==null&&e.clientY-y0>50) closeSheet(); y0=null });
+})();
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&state.game) refreshGame().catch(()=>{}) });
+boot();
+})();
+</script>
+</body>
+</html>

@@ -11,59 +11,59 @@ export const ROOM_ORDER = Object.freeze([
 export const ROOM_DEFS = Object.freeze({
   lab: {
     floor: 0,
-    name: 'Командная лаборатория',
-    short: 'Терминал, анализатор и рабочее место инженера.',
-    effect: 'Производит данные и открывает рыночную разведку.',
-    xradar: 'Торговый терминал и базовая аналитика'
+    name: 'Command Lab',
+    short: 'The intelligence terminal and central operations floor.',
+    effect: 'Produces Intel. Higher levels sharply increase hourly output.',
+    xradar: 'Trading terminal and core analytics'
   },
   power: {
     floor: 1,
-    name: 'Энергетический этаж',
-    short: 'Питает оборудование и восстанавливает запас энергии.',
-    effect: 'Больше максимальной энергии и быстрее восстановление.',
-    xradar: 'Надёжная инфраструктура'
+    name: 'Power Room',
+    short: 'The station grid, reserve cells and emergency machinery.',
+    effect: '+25 maximum Power and faster regeneration per level.',
+    xradar: 'Reliable infrastructure'
   },
   workshop: {
     floor: 2,
-    name: 'Мастерская и склад',
-    short: 'Здесь хранятся детали и создаётся экипировка.',
-    effect: 'Расширяет офлайн-склад и снижает стоимость улучшений в компонентах.',
-    xradar: 'Защита позиции и управление инструментами'
+    name: 'Workshop & Storage',
+    short: 'Engineering tools, recovered parts and protected storage.',
+    effect: 'Extends offline storage and discounts late upgrades.',
+    xradar: 'Position protection and tooling'
   },
   comms: {
     floor: 3,
-    name: 'Коммуникационный центр',
-    short: 'Связывает все системы убежища.',
-    effect: 'Ускоряет все работы на 4% за уровень, максимум на 40%.',
-    xradar: 'Живой поток рыночных данных'
+    name: 'Communications Hub',
+    short: 'A low-latency backbone for every station system.',
+    effect: 'Reduces all construction time by 4% per level, up to 40%.',
+    xradar: 'Live market data stream'
   },
   automation: {
     floor: 4,
-    name: 'Серверная автоматизации',
-    short: 'Продолжает наблюдение, когда оператор не в сети.',
-    effect: 'Увеличивает офлайн-производство данных на 15% за уровень.',
-    xradar: 'Автоматизация наблюдений'
+    name: 'Automation Servers',
+    short: 'Autonomous market monitoring while the operator is away.',
+    effect: '+15% offline Intel production per level.',
+    xradar: 'Automated monitoring'
   },
   antenna: {
     floor: 5,
-    name: 'Антенная комната',
-    short: 'Принимает новые сигналы рынка.',
-    effect: 'Открывает регулярную разведку и дополнительные сигналы.',
-    xradar: 'Лента новых токенов'
+    name: 'Signal Array',
+    short: 'Receives larger batches of external market observations.',
+    effect: 'Adds more signals to each intelligence wave.',
+    xradar: 'New token feed'
   },
   analysis: {
     floor: 6,
-    name: 'Аналитический центр',
-    short: 'Раскрывает скрытые факторы риска.',
-    effect: 'Показывает концентрацию держателей и изменяемость контракта.',
-    xradar: 'Скоринг безопасности'
+    name: 'Risk Analysis Center',
+    short: 'Reveals risk bands, mint authority and holder concentration.',
+    effect: 'More evidence becomes visible at levels 3, 6 and 9.',
+    xradar: 'Safety scoring'
   },
   interceptor: {
     floor: 7,
-    name: 'Узел перехвата',
-    short: 'Отслеживает активность крупных кошельков.',
-    effect: 'Добавляет показатель активности крупных держателей.',
-    xradar: 'Лидерборд умных кошельков'
+    name: 'Wallet Interceptor',
+    short: 'Observes coordinated activity from large wallets.',
+    effect: 'Shows smart-wallet activity and enables rare Part finds.',
+    xradar: 'Smart-wallet leaderboard'
   }
 });
 
@@ -128,27 +128,27 @@ export const INCIDENT_DEFS = Object.freeze({
 
 export const ITEM_DEFS = Object.freeze({
   field_coat: {
-    name: 'Куртка инженера', slot: 'body', effect: 'Базовая защита для работы в бункере.',
+    name: 'Field Operations Coat', slot: 'body', effect: 'Standard protection for underground work.',
     bonus: {}
   },
   insulated_gloves: {
-    name: 'Изолирующие перчатки', slot: 'tool', effect: 'Работы выполняются на 5% быстрее.',
+    name: 'Insulated Gloves', slot: 'tool', effect: 'Work actions complete 5% faster.',
     bonus: { workSpeed: 0.05 }
   },
   analyst_goggles: {
-    name: 'Очки аналитика', slot: 'head', effect: 'Подсвечивают рискованные параметры сигнала.',
+    name: 'Analyst Optics', slot: 'head', effect: 'Adds a visible analysis aid to the operator.',
     bonus: { analysis: 1 }
   },
   utility_vest: {
-    name: 'Разгрузочный жилет', slot: 'body', effect: 'Строительство расходует на 1 компонент меньше.',
+    name: 'Utility Harness', slot: 'body', effect: 'Late upgrades cost fewer Parts.',
     bonus: { componentDiscount: 1 }
   },
   field_tablet: {
-    name: 'Полевой планшет', slot: 'tool', effect: 'Даёт ещё один сигнал в разведке.',
+    name: 'Field Tablet', slot: 'tool', effect: 'Adds one extra intercepted signal.',
     bonus: { extraSignal: 1 }
   },
   headlamp: {
-    name: 'Налобный фонарь', slot: 'head', effect: 'Работы на новых этажах выполняются на 5% быстрее.',
+    name: 'Industrial Headlamp', slot: 'head', effect: 'Work on new levels completes 5% faster.',
     bonus: { workSpeed: 0.05 }
   }
 });
@@ -159,7 +159,7 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const asMs = value => value instanceof Date ? value.getTime() : new Date(value).getTime();
 const dayKey = value => new Date(value).toISOString().slice(0, 10);
 
-export function createPlayer({ telegramId, firstName = 'Оператор', username = null, now = new Date() }) {
+export function createPlayer({ telegramId, firstName = 'Operator', username = null, now = new Date() }) {
   const timestamp = new Date(now);
   const player = {
     schemaVersion: SCHEMA_VERSION,
@@ -219,9 +219,16 @@ export function createPlayer({ telegramId, firstName = 'Оператор', usern
   return player;
 }
 
+// Saves written before the English-first pass stored the placeholder name in
+// Russian. It is a legacy data sentinel, not UI copy: without it those players
+// would inherit a Cyrillic call sign the client then shows verbatim. Real
+// Cyrillic names supplied by Telegram stay untouched.
+const PLACEHOLDER_FIRST_NAMES = new Set(['Operator', 'Оператор']);
+
 function createAppearance(firstName = 'Operator') {
   const initialName = String(firstName || '').trim();
-  return { callSign: initialName && initialName !== 'Оператор' ? initialName.slice(0, 18) : 'Operator', gender: 'custom', face: 3, build: 3, hair: 4, gear: 2 };
+  const named = initialName && !PLACEHOLDER_FIRST_NAMES.has(initialName);
+  return { callSign: named ? initialName.slice(0, 18) : 'Operator', gender: 'custom', face: 3, build: 3, hair: 4, gear: 2 };
 }
 
 function createReferralCode(telegramId) {
@@ -253,13 +260,13 @@ function createRooms() {
 }
 
 export function ensurePlayerShape(player, now = new Date()) {
-  if (!player || typeof player !== 'object') throw gameError('INVALID_PLAYER', 'Состояние игрока повреждено.', 500);
+  if (!player || typeof player !== 'object') throw gameError('INVALID_PLAYER', 'The player state is corrupted.', 500);
   // v3 already uses rooms. Running the legacy v2 migration on it would erase
   // constructed floors, so only the pre-room model goes through that converter.
   if (Number(player.schemaVersion || 1) <= 2 || !player.rooms) migratePlayerV2(player, now);
   const timestamp = new Date(now);
   player.schemaVersion = SCHEMA_VERSION;
-  player.profile ||= { firstName: 'Оператор', username: null };
+  player.profile ||= { firstName: 'Operator', username: null };
   player.profile.appearance ||= createAppearance(player.profile.firstName);
   if (/\?{3,}|�|(?:Р.|Ð.){3,}/.test(String(player.profile.appearance.callSign || ''))) {
     player.profile.appearance.callSign = 'Operator';
@@ -304,8 +311,8 @@ export function ensurePlayerShape(player, now = new Date()) {
   player.progression.streak ||= { current: 1, best: 1, lastDay: dayKey(timestamp), lastReward: 1 };
   player.progression.recon ||= { round: 0, signals: [], nextAt: timestamp, lastResult: null };
   player.progression.recon.signals ||= [];
-  // Сигналы, сохранённые до появления рыночной карточки, дополняем на месте:
-  // иначе у игроков, уже начавших смену, экран анализа остался бы пустым.
+  // Signals saved before the market card existed are backfilled in place:
+  // otherwise players mid-shift would open the analysis screen and find it empty.
   for (const signal of player.progression.recon.signals) {
     if (signal && !signal.market) {
       signal.market = buildMarketData(signal, seededRandom(`${signal.id}:market`));
@@ -367,18 +374,18 @@ export function updateAppearance(player, appearance = {}) {
   ensurePlayerShape(player);
   const callSign = String(appearance.callSign ?? '').trim().replace(/\s+/g, ' ');
   if (!callSign || Array.from(callSign).length > 18) {
-    throw gameError('INVALID_APPEARANCE', 'Позывной должен содержать от 1 до 18 символов.');
+    throw gameError('INVALID_APPEARANCE', 'The call sign must be 1 to 18 characters.');
   }
   const gender = String(appearance.gender || '');
   if (!['female', 'male', 'custom'].includes(gender)) {
-    throw gameError('INVALID_APPEARANCE', 'Неизвестный вариант внешности.');
+    throw gameError('INVALID_APPEARANCE', 'Unknown operator appearance option.');
   }
   const limits = { face: 6, build: 5, hair: 8, gear: 5 };
   const normalized = { callSign, gender };
   for (const [key, max] of Object.entries(limits)) {
     const value = Number(appearance[key]);
     if (!Number.isInteger(value) || value < 1 || value > max) {
-      throw gameError('INVALID_APPEARANCE', 'Параметры внешности вне допустимого диапазона.');
+      throw gameError('INVALID_APPEARANCE', 'Operator appearance values are out of range.');
     }
     normalized[key] = value;
   }
@@ -397,11 +404,11 @@ export function updateCosmetics(player, cosmetics = {}) {
   const normalized = {};
   for (const [key, values] of Object.entries(allowed)) {
     const value = String(cosmetics[key] || '');
-    if (!values.includes(value)) throw gameError('INVALID_COSMETIC', 'Неизвестный косметический вариант.');
+    if (!values.includes(value)) throw gameError('INVALID_COSMETIC', 'Unknown station appearance.');
     const entitlement = `cosmetic:${key}:${value}`;
     const isDefault = value === values[0];
     if (!isDefault && !player.progression.commerce.entitlements.includes(entitlement)) {
-      throw gameError('COSMETIC_LOCKED', 'Этот косметический вариант ещё не открыт.');
+      throw gameError('COSMETIC_LOCKED', 'This appearance has not been unlocked yet.');
     }
     normalized[key] = value;
   }
@@ -412,7 +419,7 @@ export function updateCosmetics(player, cosmetics = {}) {
 export function grantCommerceProduct(player, productId, orderId, now = new Date()) {
   ensurePlayerShape(player, now);
   const commerce = player.progression.commerce;
-  if (!orderId) throw gameError('INVALID_ORDER', 'Идентификатор заказа обязателен.');
+  if (!orderId) throw gameError('INVALID_ORDER', 'An order identifier is required.');
   if (commerce.processedOrders.includes(orderId)) return { duplicate: true, productId };
   const grants = {
     energy_refill: () => {
@@ -425,7 +432,7 @@ export function grantCommerceProduct(player, productId, orderId, now = new Date(
     },
     instant_finish: () => {
       const slot = player.hero.job ? 'primary' : player.progression.secondaryJob ? 'secondary' : null;
-      if (!slot) throw gameError('NO_ACTIVE_JOB', 'Нет активной работы для ускорения.');
+      if (!slot) throw gameError('NO_ACTIVE_JOB', 'There is no active operation to complete.');
       completeJob(player, now, slot);
       return { finished: slot };
     },
@@ -448,7 +455,7 @@ export function grantCommerceProduct(player, productId, orderId, now = new Date(
     }
   };
   const grant = grants[productId];
-  if (!grant) throw gameError('UNKNOWN_PRODUCT', 'Неизвестный товар.');
+  if (!grant) throw gameError('UNKNOWN_PRODUCT', 'Unknown product.');
   const result = grant();
   commerce.processedOrders.push(orderId);
   commerce.processedOrders = commerce.processedOrders.slice(-100);
@@ -459,12 +466,12 @@ export function startIncident(player, now = new Date()) {
   ensurePlayerShape(player, now);
   requireIdleHero(player);
   if (!player.progression.onboarding.completed) {
-    throw gameError('INCIDENT_LOCKED', 'Сначала завершите восстановление станции.');
+    throw gameError('INCIDENT_LOCKED', 'Complete the restoration protocol first.');
   }
   const incidents = player.progression.incidents;
-  if (incidents.active) throw gameError('INCIDENT_ACTIVE', 'Тревога уже активна.');
+  if (incidents.active) throw gameError('INCIDENT_ACTIVE', 'A station incident is already active.');
   if (asMs(now) < asMs(incidents.nextAt)) {
-    throw gameError('INCIDENT_COOLDOWN', 'Системы безопасности ещё анализируют прошлую тревогу.');
+    throw gameError('INCIDENT_COOLDOWN', 'Security systems are still analyzing the last incident.');
   }
   const types = Object.keys(INCIDENT_DEFS);
   const type = types[incidents.completed % types.length];
@@ -485,11 +492,11 @@ export function startIncident(player, now = new Date()) {
 export function resolveIncident(player, action, now = new Date()) {
   ensurePlayerShape(player, now);
   const incidents = player.progression.incidents;
-  if (!incidents.active) throw gameError('NO_ACTIVE_INCIDENT', 'Активная тревога не найдена.');
+  if (!incidents.active) throw gameError('NO_ACTIVE_INCIDENT', 'No active incident was found.');
   const outcome = INCIDENT_DEFS[incidents.active.type]?.outcomes?.[action];
-  if (!outcome) throw gameError('INVALID_INCIDENT_ACTION', 'Выберите способ подавления тревоги.');
+  if (!outcome) throw gameError('INVALID_INCIDENT_ACTION', 'Choose a countermeasure for the incident.');
   if (player.resources.energy < outcome.energy) {
-    throw gameError('NOT_ENOUGH_ENERGY', `Нужно ${outcome.energy} энергии.`);
+    throw gameError('NOT_ENOUGH_ENERGY', `Requires ${outcome.energy} Power.`);
   }
   player.resources.energy -= outcome.energy;
   applyReward(player, outcome.reward);
@@ -565,7 +572,7 @@ export function migratePlayerV2(player, now = new Date()) {
     cooldowns: { terminal: timestamp, generator: timestamp },
     incidents: { active: null, completed: 0, nextAt: timestamp, lastCompleted: null },
     returnReport: null,
-    lastCompleted: { id: 'migration_v3', title: 'Системы убежища обновлены', at: timestamp }
+    lastCompleted: { id: 'migration_v3', title: 'Station systems updated', at: timestamp }
   };
   player.stats = {
     completedJobs: Number(player.stats?.completedBuilds || 0),
@@ -722,7 +729,7 @@ function completeJob(player, now, slot = 'primary') {
   player.stats.completedJobs += 1;
   player.progression.lastCompleted = {
     id: job.id,
-    title: job.completeTitle || 'Работа завершена',
+    title: job.completeTitle || 'Operation complete',
     reward: job.reward || {},
     at: new Date(now)
   };
@@ -751,11 +758,11 @@ function grantItem(player, itemId) {
 
 export function roomAccess(player, roomId) {
   const room = player.rooms?.[roomId];
-  if (!room) return { unlocked: false, reason: 'Неизвестное помещение.' };
+  if (!room) return { unlocked: false, reason: 'Unknown room.' };
   if (room.level > 0 || room.construction) return { unlocked: true, reason: null };
   if (roomId === 'lab') return { unlocked: true, reason: null };
   if (roomId === 'power' && !player.progression.onboarding.completed && player.progression.onboarding.step < 4) {
-    return { unlocked: false, reason: 'Сначала восстановите системы лаборатории.' };
+    return { unlocked: false, reason: 'Restore the Command Lab systems first.' };
   }
   if (roomId === 'power' && !player.progression.onboarding.completed && player.progression.onboarding.step >= 4) {
     return { unlocked: true, reason: null };
@@ -763,13 +770,13 @@ export function roomAccess(player, roomId) {
   const level = id => Number(player.rooms?.[id]?.level || 0);
   const levelThreeRooms = ROOM_ORDER.filter(id => level(id) >= 3).length;
   const rules = {
-    power: [level('lab') >= 2, 'Нужен терминал 2 уровня.'],
-    workshop: [level('lab') >= 3, 'Нужен терминал 3 уровня.'],
-    comms: [levelThreeRooms >= 2, 'Нужны любые два помещения 3 уровня.'],
-    automation: [level('workshop') >= 3, 'Нужна мастерская и склад 3 уровня.'],
-    antenna: [level('comms') >= 2, 'Нужен коммуникационный центр 2 уровня.'],
-    analysis: [level('antenna') >= 3, 'Нужна антенная комната 3 уровня.'],
-    interceptor: [level('analysis') >= 4, 'Нужен аналитический центр 4 уровня.']
+    power: [level('lab') >= 2, 'Requires Command Lab level 2.'],
+    workshop: [level('lab') >= 3, 'Requires Command Lab level 3.'],
+    comms: [levelThreeRooms >= 2, 'Requires any two rooms at level 3.'],
+    automation: [level('workshop') >= 3, 'Requires Workshop & Storage level 3.'],
+    antenna: [level('comms') >= 2, 'Requires Communications Hub level 2.'],
+    analysis: [level('antenna') >= 3, 'Requires Signal Array level 3.'],
+    interceptor: [level('analysis') >= 4, 'Requires Risk Analysis Center level 4.']
   };
   const rule = rules[roomId];
   if (rule && !rule[0]) return { unlocked: false, reason: rule[1] };
@@ -797,26 +804,26 @@ export function roomCost(player, roomId, targetLevel = null) {
 
 export function startConstruction(player, roomId, now = new Date(), timeScale = 1) {
   ensurePlayerShape(player, now);
-  if (player.progression?.incidents?.active) throw gameError('INCIDENT_ACTIVE', 'Сначала устраните тревогу на станции.');
+  if (player.progression?.incidents?.active) throw gameError('INCIDENT_ACTIVE', 'Contain the active station incident first.');
   const secondarySlot = Boolean(player.hero.job && subscriptionActive(player, now) && !player.progression.secondaryJob);
-  if (player.hero.job && !secondarySlot) throw gameError('HERO_BUSY', subscriptionActive(player, now) ? 'Оба строительных слота заняты.' : 'Сначала дождитесь завершения текущей работы.');
+  if (player.hero.job && !secondarySlot) throw gameError('HERO_BUSY', subscriptionActive(player, now) ? 'Both construction slots are busy.' : 'Wait for the current operation to finish.');
   const room = player.rooms[roomId];
-  if (!room) throw gameError('UNKNOWN_ROOM', 'Неизвестное помещение.');
-  if (room.construction) throw gameError('ROOM_BUSY', 'Это помещение уже строится.');
+  if (!room) throw gameError('UNKNOWN_ROOM', 'Unknown room.');
+  if (room.construction) throw gameError('ROOM_BUSY', 'That room is already under construction.');
   const access = roomAccess(player, roomId);
   if (!access.unlocked) throw gameError('LOCKED_ROOM', access.reason);
   const cost = roomCost(player, roomId);
-  if (!cost) throw gameError('MAX_LEVEL', 'Помещение уже достигло максимального уровня.');
-  if (player.resources.data < cost.data) throw gameError('NOT_ENOUGH_DATA', `Нужно ещё ${Math.ceil(cost.data - player.resources.data)} данных.`);
-  if (player.resources.components < cost.components) throw gameError('NOT_ENOUGH_COMPONENTS', `Нужно ещё ${cost.components - player.resources.components} компонентов.`);
-  if (player.resources.energy < cost.energy) throw gameError('NOT_ENOUGH_ENERGY', `Нужно ${cost.energy} энергии.`);
+  if (!cost) throw gameError('MAX_LEVEL', 'This room has reached its maximum level.');
+  if (player.resources.data < cost.data) throw gameError('NOT_ENOUGH_DATA', `Requires ${Math.ceil(cost.data - player.resources.data)} more Intel.`);
+  if (player.resources.components < cost.components) throw gameError('NOT_ENOUGH_COMPONENTS', `Requires ${cost.components - player.resources.components} more Parts.`);
+  if (player.resources.energy < cost.energy) throw gameError('NOT_ENOUGH_ENERGY', `Requires ${cost.energy} Power.`);
 
   const currentFloor = highestOpenFloor(player);
   const targetNode = roomId === 'lab'
     ? 'lab_terminal'
     : room.level > 0 ? `floor_${room.floor}_console` : currentFloor === 0 ? 'lab_elevator' : `floor_${currentFloor}_elevator`;
   const path = findPath(player, targetNode);
-  if (!path) throw gameError('UNREACHABLE_OBJECT', 'Переход к строительной зоне пока закрыт.');
+  if (!path) throw gameError('UNREACHABLE_OBJECT', 'The route to the construction site is not open yet.');
   player.resources.data -= cost.data;
   player.resources.components -= cost.components;
   player.resources.energy -= cost.energy;
@@ -827,7 +834,7 @@ export function startConstruction(player, roomId, now = new Date(), timeScale = 
     type: 'construction', roomId, targetLevel: cost.level,
     startedAt: new Date(now), endsAt: new Date(asMs(now) + durationMs), durationMs,
     reward: { xp: cost.level === 1 ? 35 : 20 },
-    completeTitle: cost.level === 1 ? `${ROOM_DEFS[roomId].name}: этаж открыт` : `${ROOM_DEFS[roomId].name}: улучшение готово`
+    completeTitle: cost.level === 1 ? `${ROOM_DEFS[roomId].name}: floor opened` : `${ROOM_DEFS[roomId].name}: upgrade complete`
   };
   if (roomId === 'power' && player.progression.onboarding.step === 4) job.onboardingStep = 4;
   room.construction = { targetLevel: cost.level, startedAt: job.startedAt, endsAt: job.endsAt, durationMs };
@@ -844,11 +851,11 @@ export function startObjectAction(player, actionId, now = new Date(), timeScale 
   ensurePlayerShape(player, now);
   requireIdleHero(player);
   const spec = actionSpec(player, actionId, now);
-  if (!spec) throw gameError('UNKNOWN_ACTION', 'Это действие сейчас недоступно.');
-  if (!spec.enabled) throw gameError('ACTION_LOCKED', spec.reason || 'Действие пока недоступно.');
-  if (player.resources.energy < (spec.energy || 0)) throw gameError('NOT_ENOUGH_ENERGY', `Нужно ${spec.energy} энергии.`);
+  if (!spec) throw gameError('UNKNOWN_ACTION', 'That operation is not available.');
+  if (!spec.enabled) throw gameError('ACTION_LOCKED', spec.reason || 'That operation is not available yet.');
+  if (player.resources.energy < (spec.energy || 0)) throw gameError('NOT_ENOUGH_ENERGY', `Requires ${spec.energy} Power.`);
   const path = findPath(player, spec.node);
-  if (!path) throw gameError('UNREACHABLE_OBJECT', 'Персонаж не может подойти к этому объекту.');
+  if (!path) throw gameError('UNREACHABLE_OBJECT', 'The operator cannot reach this object.');
   player.resources.energy -= spec.energy || 0;
   player.hero.node = spec.node;
   const durationMs = Math.max(800, Math.round(spec.durationMs * Number(timeScale || 1) / (1 + equippedBonus(player, 'workSpeed'))));
@@ -877,36 +884,36 @@ function actionSpec(player, actionId, now) {
   const specs = {
     emergency_lights: {
       objectId: 'generator', node: 'lab_generator', state: 'repairing', durationMs: 3_000, energy: 0,
-      reward: { xp: 10 }, completeTitle: 'Аварийное освещение включено', onboardingStep: 0,
-      enabled: step === 0, reason: 'Освещение уже работает.'
+      reward: { xp: 10 }, completeTitle: 'Emergency lighting restored', onboardingStep: 0,
+      enabled: step === 0, reason: 'The lighting is already online.'
     },
     boot_terminal: {
       objectId: 'terminal', node: 'lab_terminal', state: 'working', durationMs: 5_000, energy: 2,
-      reward: { data: 60, xp: 10 }, completeTitle: 'Терминал запущен', onboardingStep: 1,
-      enabled: step === 1, reason: 'Сначала включите аварийное освещение.'
+      reward: { data: 60, xp: 10 }, completeTitle: 'Command Terminal online', onboardingStep: 1,
+      enabled: step === 1, reason: 'Restore the emergency lighting first.'
     },
     repair_power: {
       objectId: 'generator', node: 'lab_generator', state: 'repairing', durationMs: 8_000, energy: 4,
-      reward: { data: 30, components: 1, xp: 15 }, completeTitle: 'Энергетический узел восстановлен', onboardingStep: 3,
-      enabled: step === 3, reason: 'Сначала завершите первое исследование.'
+      reward: { data: 30, components: 1, xp: 15 }, completeTitle: 'Power Control repaired', onboardingStep: 3,
+      enabled: step === 3, reason: 'Complete the first signal assessment first.'
     },
     daily_supply: {
       objectId: 'supply', node: 'lab_supply', state: 'collecting', durationMs: 2_500, energy: 0,
-      reward: { components: supplyReward(player, now), xp: 5 }, completeTitle: 'Поставка принята',
-      enabled: supplyReady(player, now), reason: 'Следующая поставка ещё в пути.'
+      reward: { components: supplyReward(player, now), xp: 5 }, completeTitle: 'Shipment collected',
+      enabled: supplyReady(player, now), reason: 'The next shipment is still inbound.'
     },
     terminal_sync: {
       objectId: 'terminal', node: 'lab_terminal', state: 'working', durationMs: 30_000, energy: 6,
-      reward: { data: 45, xp: 8 }, completeTitle: 'Сводка терминала обновлена',
+      reward: { data: 45, xp: 8 }, completeTitle: 'Intelligence batch processed',
       enabled: player.progression.onboarding.completed && asMs(now) >= asMs(player.progression.cooldowns.terminal),
-      reason: 'Терминал уже синхронизируется или недавно обновлялся.'
+      reason: 'The terminal is already synchronizing or was refreshed recently.'
     },
     generator_charge: {
       objectId: 'generator', node: 'lab_generator', state: 'repairing', durationMs: 15_000, energy: 0,
-      reward: { energy: 25, xp: 5 }, completeTitle: 'Резерв энергии пополнен',
+      reward: { energy: 25, xp: 5 }, completeTitle: 'Power reserve restored',
       enabled: player.progression.onboarding.completed && asMs(now) >= asMs(player.progression.cooldowns.generator)
         && player.resources.energy < energyMax(player) - 5,
-      reason: player.resources.energy >= energyMax(player) - 5 ? 'Запас энергии почти полный.' : 'Генератор недавно обслуживали.'
+      reason: player.resources.energy >= energyMax(player) - 5 ? 'The Power reserve is almost full.' : 'Power Control was serviced recently.'
     }
   };
   return specs[actionId] || null;
@@ -923,10 +930,10 @@ export function calculateSignalRisk(signal) {
 export function resolveSignal(player, signalId, decision, now = new Date()) {
   ensurePlayerShape(player, now);
   requireIdleHero(player);
-  if (!['study', 'skip'].includes(decision)) throw gameError('INVALID_DECISION', 'Выберите: изучить или пропустить.');
+  if (!['study', 'skip'].includes(decision)) throw gameError('INVALID_DECISION', 'Choose to study or skip the signal.');
   const signal = player.progression.recon.signals.find(item => item.id === signalId);
-  if (!signal) throw gameError('UNKNOWN_SIGNAL', 'Сигнал больше недоступен.');
-  if (signal.source === 'xradar') throw gameError('EXTERNAL_SIGNAL_REQUIRES_RESULT', 'Живой сигнал должен быть подтверждён XRadar.', 502);
+  if (!signal) throw gameError('UNKNOWN_SIGNAL', 'This signal is no longer available.');
+  if (signal.source === 'xradar') throw gameError('EXTERNAL_SIGNAL_REQUIRES_RESULT', 'A live signal must be verified by XRadar.', 502);
   const risk = calculateSignalRisk(signal);
   const safe = risk < 50;
   const correct = decision === 'study' ? safe : !safe;
@@ -955,8 +962,8 @@ export function resolveSignal(player, signalId, decision, now = new Date()) {
     reward.dailyComponents = 5;
   }
   const explanation = safe
-    ? `Риск ${risk}/100: высокая ликвидность и умеренная концентрация делают сигнал подходящим для изучения.`
-    : `Риск ${risk}/100: слабая ликвидность, концентрация держателей или изменяемый контракт требуют осторожности.`;
+    ? `Risk ${risk}/100: deep liquidity and moderate holder concentration make this signal safe to research.`
+    : `Risk ${risk}/100: thin liquidity, holder concentration or a mutable contract call for caution.`;
   const result = { signalId, decision, correct, safe, risk, reward, rareFind: Boolean(rareComponent), explanation, resolvedAt: new Date(now) };
   player.progression.recon.lastResult = result;
   player.progression.recon.signals = player.progression.recon.signals.filter(item => item.id !== signalId);
@@ -968,7 +975,7 @@ export function resolveSignal(player, signalId, decision, now = new Date()) {
   if (player.progression.recon.signals.length === 0) {
     player.progression.recon.nextAt = new Date(asMs(now) + RECON_INTERVAL_MS);
   }
-  player.progression.lastCompleted = { id: `signal_${signalId}`, title: correct ? 'Решение подтверждено' : 'Разбор завершён', reward, at: new Date(now) };
+  player.progression.lastCompleted = { id: `signal_${signalId}`, title: correct ? 'Assessment confirmed' : 'Assessment reviewed', reward, at: new Date(now) };
   checkAchievements(player, now);
   return result;
 }
@@ -976,7 +983,7 @@ export function resolveSignal(player, signalId, decision, now = new Date()) {
 export function importExternalSignals(player, wave, now = new Date()) {
   ensurePlayerShape(player, now);
   requireIdleHero(player);
-  if (!Array.isArray(wave) || wave.length < 1) throw gameError('INVALID_WAVE', 'XRadar не вернул сигналы.');
+  if (!Array.isArray(wave) || wave.length < 1) throw gameError('INVALID_WAVE', 'XRadar returned no signals.');
   player.progression.recon.signals = wave.slice(0, 8).map((item, index) => {
     const prices = Array.isArray(item.chart) ? item.chart.map(point => Number(point.p)).filter(Number.isFinite) : [];
     const liquidity = clamp(Math.round(Math.log10(Math.max(10, Number(item.liquidity || 10))) * 20), 20, 95);
@@ -1017,10 +1024,10 @@ export function importExternalSignals(player, wave, now = new Date()) {
 export function resolveExternalSignal(player, signalId, decision, external, now = new Date()) {
   ensurePlayerShape(player, now);
   requireIdleHero(player);
-  if (!['study', 'skip'].includes(decision)) throw gameError('INVALID_DECISION', 'Выберите: изучить или пропустить.');
+  if (!['study', 'skip'].includes(decision)) throw gameError('INVALID_DECISION', 'Choose to study or skip the signal.');
   const signal = player.progression.recon.signals.find(item => item.id === signalId && item.source === 'xradar');
-  if (!signal) throw gameError('UNKNOWN_SIGNAL', 'Сигнал больше недоступен.');
-  if (!external || typeof external.correct !== 'boolean') throw gameError('INVALID_WAVE_RESULT', 'XRadar не подтвердил результат.', 502);
+  if (!signal) throw gameError('UNKNOWN_SIGNAL', 'This signal is no longer available.');
+  if (!external || typeof external.correct !== 'boolean') throw gameError('INVALID_WAVE_RESULT', 'XRadar did not confirm the outcome.', 502);
   const correct = external.correct;
   const reward = correct ? { data: 100, components: 2, xp: 22 } : { data: 20, components: 0, xp: 8 };
   applyReward(player, reward);
@@ -1061,16 +1068,17 @@ export function resolveExternalSignal(player, signalId, decision, external, now 
 }
 
 /**
- * Рыночная карточка токена: график, объёмы и цифры.
+ * The token market card: chart, volumes and figures.
  *
- * ВСЁ ВЫВОДИТСЯ ИЗ ЧЕТЫРЁХ ВИДИМЫХ МЕТРИК — ликвидности, концентрации,
- * активности и изменяемости контракта. Это принципиально: игрок должен уметь
- * прочитать риск по графику и цифрам и прийти к тому же выводу, что и формула
- * calculateSignalRisk. Если бы график был случайным, обучение превратилось бы в
- * угадывание, а разбор перестал бы что-либо объяснять.
+ * EVERYTHING IS DERIVED FROM THE FOUR VISIBLE METRICS — liquidity,
+ * concentration, activity and contract mutability. That is the point: the
+ * player must be able to read the risk off the chart and the numbers and reach
+ * the same conclusion as the calculateSignalRisk formula. Were the chart
+ * random, learning would collapse into guesswork and the debrief would explain
+ * nothing.
  *
- * Ряд детерминирован: одно и то же зерно даёт один и тот же график, поэтому
- * карточку можно сохранить и показать позже без расхождений.
+ * The series is deterministic: the same seed yields the same chart, so a card
+ * can be stored and shown later without diverging.
  */
 function buildMarketData(signal, random) {
   const { activity, liquidity, concentration, mutable } = signal;
@@ -1078,18 +1086,18 @@ function buildMarketData(signal, random) {
   const liquidityUsd = Math.round(1_500 * Math.pow(1.045, liquidity) / 10) * 10;
   const volume24hUsd = Math.round(liquidityUsd * (0.35 + activity / 90) / 10) * 10;
   const marketCapUsd = Math.round(liquidityUsd * (3.2 + activity / 28) / 100) * 100;
-  // Число держателей должно читаться заодно с концентрацией: чем большая доля
-  // сидит в десяти кошельках, тем меньше круг владельцев вообще.
+  // The holder count has to read consistently with concentration: the larger
+  // the share held by ten wallets, the smaller the circle of owners overall.
   const holders = Math.max(38, Math.round((60 + liquidity * 13) * (1 - concentration / 160)));
   const ageHours = Math.max(2, Math.round(4 + (100 - activity) * 0.9 + random() * 20));
   const buyShare = 0.5 + (activity - 50) / 260 - (concentration - 40) / 320;
   const trades = Math.max(24, Math.round(volume24hUsd / 140));
   const buys = Math.max(6, Math.round(trades * Math.min(0.86, Math.max(0.16, buyShare))));
 
-  // Форма графика — прямое следствие метрик:
-  //   ликвидность задаёт наклон и гладкость,
-  //   концентрация — вероятность и высоту выброса с последующим сливом,
-  //   изменяемый контракт добавляет провалы.
+  // The shape of the chart follows directly from the metrics:
+  //   liquidity sets the slope and the smoothness,
+  //   concentration sets the odds and height of a spike followed by a dump,
+  //   a mutable contract adds drawdowns.
   const drift = ((liquidity - 48) / 50) * 0.0075 + ((activity - 50) / 50) * 0.0035;
   const jitter = (100 - liquidity) / 100 * 0.055 + (mutable ? 0.02 : 0);
   const pump = Math.max(0, (concentration - 45) / 55);
@@ -1099,7 +1107,7 @@ function buildMarketData(signal, random) {
   let price = 0.00035 + random() * 0.0009;
   for (let i = 0; i < points; i += 1) {
     const t = i / (points - 1);
-    // Колокол на трети пути: разгон, за которым идёт распродажа.
+    // A bell a third of the way in: the run-up, followed by the sell-off.
     const bell = Math.exp(-Math.pow((t - 0.34) / 0.13, 2));
     const dump = t > 0.46 ? -pump * 0.055 * (t - 0.46) / 0.54 : 0;
     const step = drift + pump * 0.05 * bell + dump + (random() - 0.5) * jitter;
@@ -1182,8 +1190,8 @@ function reconAvailable(player, now) {
 export function equipItem(player, itemId) {
   ensurePlayerShape(player);
   const item = ITEM_DEFS[itemId];
-  if (!item) throw gameError('UNKNOWN_ITEM', 'Предмет не найден.');
-  if (!player.progression.inventory.owned.includes(itemId)) throw gameError('ITEM_LOCKED', 'Этот предмет ещё не найден.');
+  if (!item) throw gameError('UNKNOWN_ITEM', 'Unknown item.');
+  if (!player.progression.inventory.owned.includes(itemId)) throw gameError('ITEM_LOCKED', 'This item has not been recovered yet.');
   player.hero.outfit[item.slot] = player.hero.outfit[item.slot] === itemId && item.slot !== 'body' ? null : itemId;
   player.progression.inventory.newItem = null;
   return player.hero.outfit;
@@ -1224,8 +1232,8 @@ export function moveHero(player, targetNode) {
   ensurePlayerShape(player);
   requireIdleHero(player);
   const path = findPath(player, targetNode);
-  if (!NAV_POINTS[targetNode]) throw gameError('UNKNOWN_NODE', 'Неизвестная точка убежища.');
-  if (!path) throw gameError('UNREACHABLE_NODE', 'Этот этаж пока закрыт.');
+  if (!NAV_POINTS[targetNode]) throw gameError('UNKNOWN_NODE', 'Unknown station node.');
+  if (!path) throw gameError('UNREACHABLE_NODE', 'That floor is not open yet.');
   player.hero.node = targetNode;
   player.hero.state = 'idle';
   return { path, hero: player.hero };
@@ -1244,8 +1252,8 @@ function highestOpenFloor(player) {
 }
 
 function requireIdleHero(player) {
-  if (player.progression?.incidents?.active) throw gameError('INCIDENT_ACTIVE', 'Сначала устраните тревогу на станции.');
-  if (player.hero.job) throw gameError('HERO_BUSY', 'Сначала дождитесь завершения текущей работы.');
+  if (player.progression?.incidents?.active) throw gameError('INCIDENT_ACTIVE', 'Contain the active station incident first.');
+  if (player.hero.job) throw gameError('HERO_BUSY', 'Wait for the current operation to finish.');
 }
 
 export function supplyReady(player, now = new Date()) {
@@ -1398,12 +1406,12 @@ function buildObjects(player, now) {
   const elevatorAction = step === 4 ? buildActionView(player, 'power')
     : player.progression.onboarding.completed && nextRoom ? buildActionView(player, nextRoom) : null;
   return [
-    { id: 'terminal', name: 'Компьютерный терминал', roomId: 'lab', node: 'lab_terminal', status: step < 2 ? 'Нуждается в запуске' : 'Система работает', action: terminalAction },
-    { id: 'analyzer', name: 'Лабораторный анализатор', roomId: 'lab', node: 'lab_analyzer', status: step === 2 ? 'Первый сигнал готов' : 'Проверяет факторы риска', action: step === 2 || (player.rooms.antenna?.level || 0) > 0 ? { type: 'navigate', target: 'map', label: 'Открыть разведку', description: 'Посмотреть обнаруженные сигналы.' } : null },
-    { id: 'generator', name: 'Энергетический узел', roomId: 'lab', node: 'lab_generator', status: player.rooms.power.level ? 'Подключён к энергетическому этажу' : step < 4 ? 'Работает в аварийном режиме' : 'Готов к расширению', action: generatorAction },
-    { id: 'locker', name: 'Шкаф экипировки', roomId: 'lab', node: 'lab_locker', status: `${player.progression.inventory.owned.length} предметов`, action: { type: 'navigate', target: 'inventory', label: 'Открыть шкаф', description: 'Осмотреть и экипировать найденные предметы.' } },
-    { id: 'supply', name: 'Шлюз поставок', roomId: 'lab', node: 'lab_supply', status: supplyReady(player, now) ? 'Поставка ожидает' : 'Сегодня получено', action: supplyReady(player, now) ? actionView(player, 'daily_supply', now) : null },
-    { id: 'elevator', name: 'Шахта нижних этажей', roomId: 'lab', node: 'lab_elevator', status: nextRoom ? `Следующий этаж: ${ROOM_DEFS[nextRoom].name}` : 'Доступные этажи открыты', action: elevatorAction }
+    { id: 'terminal', name: 'Command Terminal', roomId: 'lab', node: 'lab_terminal', status: step < 2 ? 'Awaiting startup' : 'System online', action: terminalAction },
+    { id: 'analyzer', name: 'Signal Radar', roomId: 'lab', node: 'lab_analyzer', status: step === 2 ? 'First signal ready' : 'Screening risk factors', action: step === 2 || (player.rooms.antenna?.level || 0) > 0 ? { type: 'navigate', target: 'map', label: 'Open intercepted signals', description: 'Review the signals the station has intercepted.' } : null },
+    { id: 'generator', name: 'Power Control', roomId: 'lab', node: 'lab_generator', status: player.rooms.power.level ? 'Linked to the Power Room' : step < 4 ? 'Running on emergency mode' : 'Ready for expansion', action: generatorAction },
+    { id: 'locker', name: 'Equipment Locker', roomId: 'lab', node: 'lab_locker', status: `${player.progression.inventory.owned.length} item${player.progression.inventory.owned.length === 1 ? '' : 's'} stored`, action: { type: 'navigate', target: 'inventory', label: 'Open equipment storage', description: 'Inspect and equip recovered items.' } },
+    { id: 'supply', name: 'Surface Supply Access', roomId: 'lab', node: 'lab_supply', status: supplyReady(player, now) ? 'Shipment waiting' : 'Shipment collected', action: supplyReady(player, now) ? actionView(player, 'daily_supply', now) : null },
+    { id: 'elevator', name: 'Expansion Elevator', roomId: 'lab', node: 'lab_elevator', status: nextRoom ? `Next floor: ${ROOM_DEFS[nextRoom].name}` : 'All available floors are open', action: elevatorAction }
   ];
 }
 
@@ -1422,7 +1430,7 @@ function buildActionView(player, roomId) {
   const cost = roomCost(player, roomId);
   return {
     type: 'build', roomId,
-    label: player.rooms[roomId].level ? 'Улучшить помещение' : 'Открыть новый этаж',
+    label: player.rooms[roomId].level ? 'Upgrade room' : 'Open new floor',
     description: `${ROOM_DEFS[roomId].name}: ${ROOM_DEFS[roomId].effect}`,
     enabled: Boolean(cost), cost: cost ? { data: cost.data, components: cost.components, energy: cost.energy } : {},
     durationMs: cost?.durationMs || 0
@@ -1430,39 +1438,39 @@ function buildActionView(player, roomId) {
 }
 
 const actionLabels = {
-  emergency_lights: 'Включить освещение', boot_terminal: 'Запустить терминал', repair_power: 'Починить узел',
-  daily_supply: 'Принять поставку', terminal_sync: 'Обновить сводку', generator_charge: 'Пополнить резерв'
+  emergency_lights: 'Restore emergency lights', boot_terminal: 'Boot the terminal', repair_power: 'Stabilize the grid',
+  daily_supply: 'Collect shipment', terminal_sync: 'Synchronize Intel', generator_charge: 'Recharge reserve'
 };
 
 const actionDescriptions = {
-  emergency_lights: 'Инженер восстановит свет в лаборатории.',
-  boot_terminal: 'Запуск терминала откроет данные и первый анализ.',
-  repair_power: 'Ремонт подготовит шахту к строительству энергетического этажа.',
-  daily_supply: 'В шлюзе находятся компоненты для строительства.',
-  terminal_sync: 'Короткая работа за терминалом принесёт новые данные.',
-  generator_charge: 'Обслуживание аварийного узла восстановит часть энергии.'
+  emergency_lights: 'Bring the Command Lab back online.',
+  boot_terminal: 'Start the intelligence workstation and load the first signal.',
+  repair_power: 'Repair the damaged Power Control system.',
+  daily_supply: 'Recover the waiting Parts shipment.',
+  terminal_sync: 'Process a fresh station intelligence batch.',
+  generator_charge: 'Restore part of the station Power reserve.'
 };
 
 function buildTasks(player, now) {
   if (player.hero.job) {
-    return [{ id: 'active_job', kind: 'active', title: 'Текущая работа', description: player.hero.job.completeTitle, target: 'bunker', progress: 0, reward: player.hero.job.reward }];
+    return [{ id: 'active_job', kind: 'active', title: 'Operation in progress', description: 'The assigned operator is completing the current task.', target: 'bunker', progress: 0, reward: player.hero.job.reward }];
   }
   const step = player.progression.onboarding.step;
   const onboarding = [
-    { id: 'lights', title: 'Вернуть свет', description: 'Включите аварийное освещение на энергетическом узле.', target: 'generator', reward: { xp: 10 } },
-    { id: 'terminal', title: 'Оживить терминал', description: 'Запустите главный компьютер лаборатории.', target: 'terminal', reward: { data: 60, xp: 10 } },
-    { id: 'first_signal', title: 'Разобрать первый сигнал', description: 'Откройте карту и примите решение по видимым признакам.', target: 'map', reward: { data: 80, components: 1 } },
-    { id: 'repair', title: 'Стабилизировать питание', description: 'Почините энергетический узел.', target: 'generator', reward: { data: 30, components: 1 } },
-    { id: 'power_floor', title: 'Открыть первый этаж', description: 'Постройте полноценный энергетический уровень.', target: 'elevator', reward: { xp: 35 } }
+    { id: 'lights', title: 'Restore the lights', description: 'Activate emergency lighting at Power Control.', target: 'generator', reward: { xp: 10 } },
+    { id: 'terminal', title: 'Bring the terminal online', description: 'Boot the Command Terminal.', target: 'terminal', reward: { data: 60, xp: 10 } },
+    { id: 'first_signal', title: 'Assess the first signal', description: 'Inspect the evidence and submit a conclusion.', target: 'map', reward: { data: 80, components: 1 } },
+    { id: 'repair', title: 'Stabilize station power', description: 'Repair Power Control.', target: 'generator', reward: { data: 30, components: 1 } },
+    { id: 'power_floor', title: 'Open the Power Room', description: 'Use the elevator to expand the Lab.', target: 'elevator', reward: { xp: 35 } }
   ];
   if (!player.progression.onboarding.completed) return [onboarding[step]];
   const tasks = [];
   const nextRoom = ROOM_ORDER.find(id => player.rooms[id].level === 0 && roomAccess(player, id).unlocked);
-  if (nextRoom) tasks.push({ id: `build_${nextRoom}`, kind: 'story', title: `Открыть: ${ROOM_DEFS[nextRoom].name}`, description: ROOM_DEFS[nextRoom].effect, target: 'elevator', reward: { xp: 35 } });
-  if (supplyReady(player, now)) tasks.push({ id: 'supply', kind: 'daily', title: 'Принять поставку', description: 'Заберите компоненты в шлюзе лаборатории.', target: 'supply', reward: { components: 3 } });
+  if (nextRoom) tasks.push({ id: `build_${nextRoom}`, kind: 'story', title: `Build: ${ROOM_DEFS[nextRoom].name}`, description: ROOM_DEFS[nextRoom].short, target: 'elevator', reward: { xp: 35 } });
+  if (supplyReady(player, now)) tasks.push({ id: 'supply', kind: 'daily', title: 'Collect the supply drop', description: 'Recover Parts from the surface access.', target: 'supply', reward: { components: 3 } });
   const recon = player.progression.recon;
-  if ((player.rooms.antenna?.level || 0) > 0 && recon.signals.length) tasks.push({ id: 'recon', kind: 'recon', title: 'Проверить рыночный сигнал', description: 'Изучите признаки и примите обоснованное решение.', target: 'map', reward: { data: 80, components: 1 } });
-  if (tasks.length < 3) tasks.push({ id: 'terminal_sync', kind: 'bunker', title: 'Обновить сводку', description: 'Синхронизируйте данные терминала.', target: 'terminal', reward: { data: 45 } });
+  if ((player.rooms.antenna?.level || 0) > 0 && recon.signals.length) tasks.push({ id: 'recon', kind: 'recon', title: 'Assess a market signal', description: 'Review the intercepted evidence.', target: 'map', reward: { data: 80, components: 1 } });
+  if (tasks.length < 3) tasks.push({ id: 'terminal_sync', kind: 'bunker', title: 'Synchronize intelligence', description: 'Process a fresh batch at the terminal.', target: 'terminal', reward: { data: 45 } });
   return tasks.slice(0, 3);
 }
 

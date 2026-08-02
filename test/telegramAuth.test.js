@@ -20,7 +20,7 @@ test('Telegram initData принимается только с корректн�
   const initData = signedInitData('123:token', now);
   const user = validateTelegramInitData(initData, '123:token', now);
   assert.equal(user.id, 42);
-  assert.throws(() => validateTelegramInitData(initData, 'wrong', now), /подпись/i);
+  assert.throws(() => validateTelegramInitData(initData, 'wrong', now), /signature/i);
 });
 
 test('серверная сессия подписывается и проверяется', () => {

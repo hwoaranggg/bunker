@@ -37,7 +37,7 @@ export function rateLimitMiddleware(limiter) {
     return res.status(429).json({
       ok: false,
       error: 'RATE_LIMITED',
-      message: 'Слишком много запросов. Дайте контуру несколько секунд.'
+      message: 'Too many requests. Give the station a few seconds.'
     });
   };
 }

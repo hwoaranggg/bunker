@@ -69,7 +69,7 @@ export function createApp({ store, config = getConfig() }) {
   const auth = asyncRoute(async (req, _res, next) => {
     const session = verifySessionToken(readCookie(req, 'bunker_session'), config.sessionSecret);
     if (!session?.telegramId) {
-      const error = new Error('Откройте игру через Telegram.');
+      const error = new Error('Open XRadar Lab from Telegram.');
       error.status = 401;
       error.code = 'SESSION_REQUIRED';
       throw error;
@@ -114,7 +114,7 @@ export function createApp({ store, config = getConfig() }) {
     } else if (config.allowDevAuth && req.body?.dev === true) {
       user = { id: '900000001', first_name: 'Demo Operator', username: 'local_demo' };
     } else {
-      const error = new Error('Запуск вне Telegram запрещён.');
+      const error = new Error('Launching outside Telegram is not allowed.');
       error.status = 401;
       error.code = 'TELEGRAM_REQUIRED';
       throw error;
@@ -372,7 +372,7 @@ export function createApp({ store, config = getConfig() }) {
     res.status(status).json({
       ok: false,
       error: error.code || 'INTERNAL_ERROR',
-      message: status >= 500 ? 'Станция временно недоступна.' : error.message
+      message: status >= 500 ? 'The station is temporarily unavailable.' : error.message
     });
   });
   return app;

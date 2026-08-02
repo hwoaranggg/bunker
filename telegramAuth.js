@@ -3,10 +3,10 @@ import crypto from 'node:crypto';
 const MAX_INIT_DATA_AGE_SECONDS = 24 * 60 * 60;
 
 export function validateTelegramInitData(initData, botToken, nowSeconds = Math.floor(Date.now() / 1000)) {
-  if (!initData || !botToken) throw authError('Telegram-авторизация не настроена.');
+  if (!initData || !botToken) throw authError('Telegram authentication is not configured.');
   const params = new URLSearchParams(initData);
   const receivedHash = params.get('hash');
-  if (!receivedHash || !/^[a-f0-9]{64}$/i.test(receivedHash)) throw authError('В initData нет корректной подписи.');
+  if (!receivedHash || !/^[a-f0-9]{64}$/i.test(receivedHash)) throw authError('initData carries no valid signature.');
 
   params.delete('hash');
   const dataCheckString = [...params.entries()]
@@ -16,20 +16,20 @@ export function validateTelegramInitData(initData, botToken, nowSeconds = Math.f
   const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
   const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
   const validHash = crypto.timingSafeEqual(Buffer.from(calculatedHash, 'hex'), Buffer.from(receivedHash, 'hex'));
-  if (!validHash) throw authError('Подпись Telegram не прошла проверку.');
+  if (!validHash) throw authError('The Telegram signature failed verification.');
 
   const authDate = Number(params.get('auth_date'));
   if (!Number.isFinite(authDate) || nowSeconds - authDate > MAX_INIT_DATA_AGE_SECONDS || authDate > nowSeconds + 60) {
-    throw authError('Сессия Telegram устарела. Откройте игру заново.');
+    throw authError('The Telegram session expired. Open the game again.');
   }
 
   let user;
   try {
     user = JSON.parse(params.get('user'));
   } catch {
-    throw authError('Telegram не передал данные пользователя.');
+    throw authError('Telegram sent no user data.');
   }
-  if (!user?.id) throw authError('Telegram не передал идентификатор пользователя.');
+  if (!user?.id) throw authError('Telegram sent no user identifier.');
   return user;
 }
 

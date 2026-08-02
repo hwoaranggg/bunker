@@ -38,7 +38,7 @@ export class PlayerStore {
     const telegramId = String(user.id);
     const fresh = createPlayer({
       telegramId,
-      firstName: user.first_name || 'Оператор',
+      firstName: user.first_name || 'Operator',
       username: user.username || null,
       now
     });
@@ -48,7 +48,7 @@ export class PlayerStore {
       { upsert: true }
     );
     await this.players.updateOne({ telegramId }, { $set: {
-      'profile.firstName': user.first_name || 'Оператор',
+      'profile.firstName': user.first_name || 'Operator',
       'profile.username': user.username || null
     }});
     return this.players.findOne({ telegramId });
@@ -62,7 +62,7 @@ export class PlayerStore {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const current = await this.getPlayer(telegramId);
       if (!current) {
-        const error = new Error('Игрок не найден.');
+        const error = new Error('Player not found.');
         error.status = 404;
         error.code = 'PLAYER_NOT_FOUND';
         throw error;
@@ -81,7 +81,7 @@ export class PlayerStore {
         return current;
       }
     }
-    const error = new Error('Состояние изменилось в другой сессии. Повторите действие.');
+    const error = new Error('The state changed in another session. Try the action again.');
     error.status = 409;
     error.code = 'STATE_CONFLICT';
     throw error;

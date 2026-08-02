@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#071014">
+  <title>XRadar Lab</title>
+  <meta name="description" content="Build an underground market intelligence station, decode signals and train your operator.">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="app">
+  <section id="auth" class="auth">
+    <div class="auth-card">
+      <div class="brand-mark"></div>
+      <div class="eyebrow">Underground intelligence station</div>
+      <h1>XRadar <span>Lab</span></h1>
+      <p>Build the station. Read market signals. Turn better decisions into progress.</p>
+      <button id="authButton" class="primary hidden" type="button">Enter the Lab</button>
+      <small id="authStatus">Establishing a secure connection…</small>
+    </div>
+  </section>
+
+  <section id="game" class="game hidden" data-neon="cyan" data-floor="steel" data-skin="standard">
+    <header class="hud">
+      <button class="resource" data-resource-info="intel" type="button"><i>IN</i><span><b id="intelValue">0</b><small>Intel</small></span></button>
+      <button class="resource" data-resource-info="power" type="button"><i>PW</i><span><b id="powerValue">0</b><small>Power</small></span></button>
+      <button class="resource parts" data-resource-info="parts" type="button"><i>PT</i><span><b id="partsValue">0</b><small>Parts</small></span></button>
+      <button id="levelButton" class="level" type="button"><b id="levelValue">1</b><small>Level</small><i id="xpBar"></i></button>
+      <button id="soundButton" class="sound" type="button" aria-label="Toggle sound">◒</button>
+    </header>
+
+    <main class="main">
+      <section id="tab-lab" class="tab lab-tab active">
+        <div class="scene">
+          <div id="sceneMedia" class="scene-media focus-lab">
+            <img id="labImage" class="lab-image" src="/assets/lab-background-v2.png" alt="Underground XRadar command laboratory">
+            <div id="stationMap" class="station-map" aria-label="XRadar station overview">
+              <img src="/assets/station-cutaway-v1.png" alt="Eight-room underground XRadar station">
+              <div id="roomMap" class="room-map"></div>
+            </div>
+            <div class="scanlines"></div><div class="radar-fx"></div>
+            <div class="sparks"><i></i><i></i><i></i><i></i></div><div class="elevator-light"></div>
+            <div id="operatorUnit" class="unit operator-unit idle" data-gender="custom" aria-label="XRadar operator">
+              <i class="unit-shadow"></i><span class="unit-sprite"></span><span class="unit-equipment"><i class="eq-head"></i><i class="eq-body"></i><i class="eq-tool"></i></span><b id="operatorUnitLabel">Operator</b>
+            </div>
+            <div id="engineerUnit" class="unit engineer-unit hidden idle" aria-label="Station engineer"><i class="unit-shadow"></i><span class="unit-sprite"></span><b>Mara</b></div>
+            <div id="labHotspots" class="lab-hotspots">
+              <button class="hotspot hs-terminal" data-object="terminal" type="button" aria-label="Command terminal">T</button>
+              <button class="hotspot hs-analyzer" data-object="analyzer" type="button" aria-label="Signal radar">R</button>
+              <button class="hotspot hs-generator" data-object="generator" type="button" aria-label="Power control">P</button>
+              <button class="hotspot hs-locker" data-object="locker" type="button" aria-label="Equipment locker">L</button>
+              <button class="hotspot hs-supply" data-object="supply" type="button" aria-label="Supply access">S</button>
+              <button class="hotspot hs-elevator" data-object="elevator" type="button" aria-label="Station elevator">E</button>
+            </div>
+          </div>
+          <div class="camera" aria-label="Station camera">
+            <button data-view="lab" class="active" type="button">Command Lab</button>
+            <button data-view="overview" type="button">All floors</button>
+          </div>
+          <div class="scene-title"><b id="sceneTitle">Command Lab</b><span id="stationStatus">Command systems initializing</span></div>
+          <button id="goalButton" class="goal" type="button"><small>Current directive</small><b id="goalText">Restore the Lab</b></button>
+          <div id="jobStrip" class="job hidden"><div class="job-top"><b id="jobTitle">Working</b><span id="jobTime">0:00</span></div><div class="progress"><i id="jobBar"></i></div><div id="secondaryJob" class="secondary-job hidden"></div></div>
+          <button id="incidentButton" class="alert-orb" type="button" aria-label="Open station incident">⌁</button>
+          <div id="resourceFx" class="resource-fx" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <section id="tab-crew" class="tab">
+        <div class="screen-head"><div class="eyebrow">Personnel system</div><h2>Crew</h2><p>Your operator is part of the station, not a profile badge.</p></div>
+        <div class="screen-body">
+          <div id="operatorVisual" class="operator" data-gender="custom">
+            <div class="operator-preview-sprite" aria-hidden="true"></div><span class="preview-equipment"><i class="eq-head"></i><i class="eq-body"></i><i class="eq-tool"></i></span>
+            <div class="operator-copy"><b id="operatorName">Operator</b><span>Field Intelligence Lead</span></div>
+          </div>
+          <div id="crewStats" class="stat-grid"></div>
+          <div class="card accent">
+            <div class="card-top"><div><h3>Operator profile</h3><p>Every setting changes the visible station character.</p></div><span class="tag">Persistent</span></div>
+            <div class="editor-grid">
+              <div class="field"><label>Call sign</label><input id="callSign" type="text" maxlength="18" value="Operator"></div>
+              <div class="field"><label>Body profile</label><div class="portrait-options"><button data-gender="female" type="button">F</button><button data-gender="male" type="button">M</button><button data-gender="custom" type="button">X</button></div></div>
+              <div class="field"><label>Face profile</label><input data-editor-range="face" type="range" min="1" max="6" value="3"></div>
+              <div class="field"><label>Body build</label><input data-editor-range="build" type="range" min="1" max="5" value="3"></div>
+              <div class="field"><label>Hair tone</label><input data-editor-range="hair" type="range" min="1" max="8" value="4"></div>
+              <div class="field"><label>Suit accent</label><input data-editor-range="gear" type="range" min="1" max="5" value="2"></div>
+            </div>
+            <button id="saveOperator" class="primary full" type="button">Save operator</button>
+          </div>
+          <div class="section-title">Station crew</div><div id="crewList" class="card"></div>
+          <div class="section-title">Station appearance</div><div id="cosmeticList" class="card option-list"></div>
+          <div class="section-title">Referral access</div><div id="referralCard" class="card"></div>
+        </div>
+      </section>
+
+      <section id="tab-signals" class="tab">
+        <div class="screen-head"><div class="eyebrow">Market intelligence</div><h2>Signals</h2><p>Read the evidence. Advanced rooms reveal more, but never decide for you.</p></div>
+        <div id="signalsBody" class="screen-body"></div>
+      </section>
+
+      <section id="tab-missions" class="tab">
+        <div class="screen-head"><div class="eyebrow">Operations desk</div><h2>Missions</h2><p>Directives, achievements, daily accuracy and the current research season.</p></div>
+        <div class="screen-body">
+          <div class="section-title">Active directives</div><div id="missionList" class="card"></div>
+          <div class="section-title">Daily training</div><div id="dailyCard" class="card"></div>
+          <div class="section-title">Season</div><div id="seasonCard" class="card season amber"></div>
+          <div class="section-title">Accuracy leaderboard</div><div id="leaderboardList" class="card"><p>Leaderboard loads when this section opens.</p></div>
+          <div class="section-title">Achievements</div><div id="achievementList" class="card"></div>
+        </div>
+      </section>
+
+      <section id="tab-storage" class="tab">
+        <div class="screen-head"><div class="eyebrow">Equipment vault</div><h2>Storage</h2><p>Equipment is visible on the operator and changes a concrete station rule.</p></div>
+        <div class="screen-body">
+          <div class="section-title">Operator equipment</div><div id="storageList" class="card"></div>
+          <div class="section-title">Station support</div><div id="shopList" class="shop-list"></div>
+          <div id="conversionCard" class="card accent hidden"></div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="nav">
+      <button class="active" data-tab="lab" type="button"><span class="ico">⌂</span><span class="label">Lab</span></button>
+      <button data-tab="crew" type="button"><span class="ico">◉</span><span class="label">Crew</span></button>
+      <button data-tab="signals" type="button"><span class="ico">⌁</span><span class="label">Signals</span></button>
+      <button data-tab="missions" type="button"><span class="ico">◇</span><span class="label">Missions</span></button>
+      <button data-tab="storage" type="button"><span class="ico">▣</span><span class="label">Storage</span></button>
+    </nav>
+
+    <aside id="sheet" class="sheet" aria-live="polite">
+      <div class="sheet-grip"><i></i></div>
+      <div class="sheet-head"><div><h3 id="sheetTitle">System</h3><p id="sheetStatus"></p></div><button id="sheetClose" class="sheet-close" type="button" aria-label="Close">×</button></div>
+      <div id="sheetBody" class="sheet-body"></div>
+    </aside>
+    <div id="returnModal" class="modal hidden"><div class="modal-card"><small>Station report</small><h2>Welcome back, Operator</h2><p id="returnText"></p><button id="returnAccept" class="primary" type="button">Collect report</button></div></div>
+    <div id="toast" class="toast"></div>
+  </section>
+</div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

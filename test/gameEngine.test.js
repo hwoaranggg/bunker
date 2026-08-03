@@ -28,7 +28,8 @@ import {
   grantCommerceProduct,
   subscriptionActive,
   importExternalSignals,
-  resolveExternalSignal
+  resolveExternalSignal,
+  updateLanguage
 } from '../gameEngine.js';
 
 const at = value => new Date(value);
@@ -327,6 +328,44 @@ test('external XRadar wave hides its answer and resolves from verified outcome',
   assert.equal(result.symbol, 'XR42');
   assert.equal(player.stats.reconAttempts, 1);
   assert.equal(player.progression.recon.signals.length, 0);
+});
+
+test('язык переключается на живом сохранении и меняет весь контент', () => {
+  const now = at('2026-01-01T00:00:00Z');
+  const player = createPlayer({ telegramId: 71, now });
+  assert.equal(player.profile.language, 'en');
+
+  const english = publicGameState(player, now);
+  assert.equal(english.rooms.lab.name, 'Command Lab');
+  assert.equal(english.tasks[0].title, 'Restore the lights');
+  assert.equal(english.progression.inventory.items.field_coat.name, 'Field Operations Coat');
+
+  updateLanguage(player, 'ru');
+  const russian = publicGameState(player, now);
+  assert.equal(russian.profile.language, 'ru');
+  assert.equal(russian.rooms.lab.name, 'Командная лаборатория');
+  assert.equal(russian.tasks[0].title, 'Вернуть свет');
+  assert.equal(russian.progression.inventory.items.field_coat.name, 'Полевая куртка');
+  // Structural facts must survive a language switch untouched.
+  assert.equal(russian.rooms.lab.floor, english.rooms.lab.floor);
+  assert.equal(russian.progression.inventory.items.field_coat.slot, 'body');
+
+  assert.throws(() => updateLanguage(player, 'de'), error => error.code === 'INVALID_LANGUAGE');
+});
+
+test('локаль Telegram задаёт язык только при создании игрока', () => {
+  const now = at('2026-01-01T00:00:00Z');
+  assert.equal(createPlayer({ telegramId: 72, language: 'ru-RU', now }).profile.language, 'ru');
+  assert.equal(createPlayer({ telegramId: 73, language: 'en-GB', now }).profile.language, 'en');
+  // An unsupported client locale falls back rather than throwing on signup.
+  assert.equal(createPlayer({ telegramId: 74, language: 'de-AT', now }).profile.language, 'en');
+
+  // A save written before the language field existed must not crash or lose copy.
+  const legacy = createPlayer({ telegramId: 75, now });
+  delete legacy.profile.language;
+  ensurePlayerShape(legacy, now);
+  assert.equal(legacy.profile.language, 'en');
+  assert.equal(publicGameState(legacy, now).rooms.lab.name, 'Command Lab');
 });
 
 test('station incidents rotate instead of repeating one alarm', () => {

@@ -13,28 +13,52 @@ const defaultEditor={callSign:'Operator',gender:'custom',face:3,build:3,hair:4,g
 function loadEditor(){try{return {...defaultEditor,...JSON.parse(localStorage.getItem(storageKey)||'{}')}}catch{return {...defaultEditor}}}
 function deviceId(){let value=localStorage.getItem(deviceKey);if(!value){value=crypto.randomUUID?.()||String(Date.now())+'-'+Math.random().toString(36).slice(2);localStorage.setItem(deviceKey,value)}return value}
 
-const state={game:null,config:null,tab:'lab',view:'lab',signalId:null,factors:new Set(),lastResult:null,lastExpected:new Set(),lastVisible:[],poll:null,toast:null,editor:loadEditor(),editorDirty:false,sound:localStorage.getItem('xradar_lab_sound')==='1',audio:null,hum:null,leaderboard:null,catalog:null,ton:null,jobTicker:null,jobDeadline:null};
-const UNIT_SPOTS={center:{x:43,y:65},terminal:{x:24,y:65},analyzer:{x:55,y:65},generator:{x:50,y:91},locker:{x:16,y:65},supply:{x:14,y:33},elevator:{x:90,y:65},workbench:{x:76,y:65},power:{x:52,y:91}};
-const FLOOR_SPOTS=[{x:24,y:26},{x:65,y:26},{x:24,y:45},{x:65,y:45},{x:24,y:64},{x:65,y:64},{x:24,y:83},{x:65,y:83}];
-const ROOM_POS={lab:[3,9],power:[44,9],workshop:[3,31],comms:[44,31],automation:[3,52],antenna:[44,52],analysis:[3,73],interceptor:[44,73]};
-const TAB_INDEX={lab:0,crew:1,signals:2,missions:3,storage:4};
-const ROOM={
-  lab:{name:'Command Lab',desc:'The intelligence terminal and central operations floor.',effect:'Produces Intel. Higher levels sharply increase hourly output.'},
-  power:{name:'Power Room',desc:'The station grid, reserve cells and emergency machinery.',effect:'+25 maximum Power and faster regeneration per level.'},
-  workshop:{name:'Workshop & Storage',desc:'Engineering tools, recovered parts and protected storage.',effect:'Extends offline storage and discounts late upgrades.'},
-  comms:{name:'Communications Hub',desc:'A low-latency backbone for every station system.',effect:'Reduces all construction time by 4% per level.'},
-  automation:{name:'Automation Servers',desc:'Autonomous market monitoring while the operator is away.',effect:'+15% offline Intel production per level.'},
-  antenna:{name:'Signal Array',desc:'Receives larger batches of external market observations.',effect:'Adds more signals to each intelligence wave.'},
-  analysis:{name:'Risk Analysis Center',desc:'Reveals risk bands, mint authority and holder concentration.',effect:'More evidence becomes visible at levels 3, 6 and 9.'},
-  interceptor:{name:'Wallet Interceptor',desc:'Observes coordinated activity from large wallets.',effect:'Shows smart-wallet activity and enables rare Part finds.'}
-};
-const OBJECT={terminal:['Command Terminal','Processes market intelligence and produces Intel.'],analyzer:['Signal Radar','Opens intercepted assets for evidence-based risk assessment.'],generator:['Power Control','Maintains the underground station power grid.'],locker:['Equipment Locker','Stores visible operator clothing and tools.'],supply:['Surface Supply Access','Receives 2–4 construction Parts every six hours.'],elevator:['Expansion Elevator','Opens the full station view and every buildable room.']};
-const ACTION={emergency_lights:['Restore emergency lights','Bring the Command Lab back online.'],boot_terminal:['Boot the terminal','Start the intelligence workstation and load the first signal.'],repair_power:['Stabilize the grid','Repair the damaged Power Control system.'],daily_supply:['Collect shipment','Recover the waiting Parts shipment.'],terminal_sync:['Synchronize Intel','Process a fresh station intelligence batch.'],generator_charge:['Recharge reserve','Restore part of the station Power reserve.']};
-const ITEM={field_coat:['Field Operations Coat','Standard protection for underground work.'],insulated_gloves:['Insulated Gloves','Work actions complete 5% faster.'],analyst_goggles:['Analyst Optics','Adds a visible analysis aid to the operator.'],utility_vest:['Utility Harness','Late upgrades cost fewer Parts.'],field_tablet:['Field Tablet','Adds one extra intercepted signal.'],headlamp:['Industrial Headlamp','Work on new levels completes 5% faster.']};
-/* Mission copy is not duplicated here. The server owns every task title and
-   description and now sends them in English, so taskCopy reads them straight
-   off the payload. The local TASK table that used to mask Russian strings was
-   removed once server and client stopped disagreeing. */
+const state={game:null,config:null,tab:'lab',view:'lab',signalId:null,factors:new Set(),lastResult:null,lastExpected:new Set(),lastVisible:[],poll:null,toast:null,editor:loadEditor(),editorDirty:false,sound:localStorage.getItem('xradar_lab_sound')==='1',audio:null,hum:null,leaderboard:null,catalog:null,ton:null,jobTicker:null,jobDeadline:null,serverNode:null,sheet:null};
+/* ==========================================================================
+   Station geometry
+
+   One coordinate space, shared with the CSS cutaway: x and y are percentages
+   of the scene. Eight floors of equal height, a room band on the left and one
+   elevator shaft on the right.
+
+   Every id below is a node in the server's navigation graph, so a path handed
+   back by the API maps straight onto screen positions. Two nodes on the same
+   floor differ only in x, and the two elevator nodes of neighbouring floors
+   differ only in y — which is what makes "walk along the floor, ride the
+   shaft" fall out of the data instead of being special-cased.
+   ========================================================================== */
+const FLOORS=8;
+const SHAFT_X=92;
+const floorTop=floor=>floor*(100/FLOORS);
+/* Feet rest just above the floor line that closes each room box. */
+const floorLine=floor=>floorTop(floor)+(100/FLOORS)-1.2;
+
+const LAB_X={lab_supply:9,lab_generator:21,lab_center:40,lab_analyzer:52,lab_terminal:64,lab_locker:76,lab_elevator:SHAFT_X};
+const OBJECT_X={supply:9,generator:21,analyzer:52,terminal:64,locker:76,elevator:SHAFT_X};
+const OBJECT_ICON={terminal:'i-monitor',analyzer:'i-radio',generator:'i-zap',locker:'i-archive',supply:'i-inbound',elevator:'i-elevator'};
+
+function nodePoint(node){
+  const id=String(node||'');
+  if(LAB_X[id]!==undefined)return {x:LAB_X[id],y:floorLine(0),floor:0,shaft:id==='lab_elevator'};
+  const match=/^floor_(\d+)_(elevator|center|console)$/.exec(id);
+  if(!match)return {x:LAB_X.lab_center,y:floorLine(0),floor:0,shaft:false};
+  const floor=Number(match[1]);
+  const x=match[2]==='elevator'?SHAFT_X:match[2]==='center'?45:20;
+  return {x,y:floorLine(floor),floor,shaft:match[2]==='elevator'};
+}
+const TAB_INDEX={lab:0,signals:1,crew:2};
+/* No copy tables live here any more.
+
+   Room names, object names and blurbs, action labels, item names, task titles
+   and job labels all arrive on the payload already rendered in the player's
+   language. The local ROOM/OBJECT/ACTION/ITEM/TASK dictionaries that used to
+   shadow them were not just duplication — once the server learned Russian they
+   actively pinned half the UI to English, which is exactly the bug they were
+   originally added to hide.
+
+   The one thing still needed locally is the item id list, because equipment
+   drives CSS classes on the operator sprite rather than text. */
+const ITEM_IDS=['field_coat','insulated_gloves','analyst_goggles','utility_vest','field_tablet','headlamp'];
 const HAIR=['#17191d','#4a3027','#76513b','#a8b4b5','#d6cfc0','#7c2223','#31555d','#c1c8cf'];
 const GEAR=['#3fddc4','#5fd4ff','#f2b43f','#9dacc0','#d5efe9'];
 const CREW_ICON={engineer:'i-wrench',analyst:'i-radio'};
@@ -148,7 +172,7 @@ function setAmbient(on){
 }
 function notify(message,error=false){clearTimeout(state.toast);const toast=$('toast');toast.textContent=message;toast.classList.toggle('error',error);toast.classList.add('show');state.toast=setTimeout(()=>toast.classList.remove('show'),error?4300:3000)}
 function taskCopy(task){return{title:task.title||'Station directive',desc:task.description||'Complete the current operation.'}}
-function actionCopy(action){return ACTION[action?.id]||[action?.label||'Start operation',action?.description||'Assign the operator to this task.']}
+function actionCopy(action){return [action?.label||'Start operation',action?.description||'Assign the operator to this task.']}
 
 /* ==========================================================================
    Render scheduling
@@ -197,8 +221,6 @@ function renderAll(){
 function renderActiveTab(){
   if(state.tab==='crew')renderCrew();
   else if(state.tab==='signals')renderSignals();
-  else if(state.tab==='missions')renderMissions();
-  else if(state.tab==='storage')renderStorage();
 }
 function applyTheme(){const cosmetic=state.game.profile.cosmetics||{};const game=$('game');game.dataset.neon=cosmetic.neon||'cyan';game.dataset.floor=cosmetic.floor||'steel';game.dataset.skin=cosmetic.heroSkin||'standard'}
 
@@ -239,7 +261,7 @@ function renderLab(){
   const incident=game.progression.incidents?.active;
   q('.scene').classList.toggle('incident',Boolean(incident));
   $('incidentButton').title=incident?'Active: '+incident.title:game.progression.incidents?.ready?'Run tactical incident':'Security systems standing by';
-  renderRoomMap();renderUnits();
+  renderStation();renderUnits();
 }
 function paintJobClock(){
   const remaining=Math.max(0,state.jobDeadline-performance.now());
@@ -249,34 +271,173 @@ function paintJobClock(){
 function startJobTicker(){if(state.jobTicker)return;state.jobTicker=setInterval(paintJobClock,250)}
 function stopJobTicker(){clearInterval(state.jobTicker);state.jobTicker=null}
 
-function renderRoomMap(){
+function renderStation(){
   const game=state.game;
-  const signature=game.roomOrder.map(id=>{const room=game.rooms[id];return id+':'+room.level+':'+(room.unlocked?1:0)+':'+(room.construction?Math.round(room.construction.progress*100):'-')}).join('|');
-  gate('roomMap',signature,()=>{
-    $('roomMap').innerHTML=game.roomOrder.map(id=>{
-      const room=game.rooms[id],position=ROOM_POS[id],copy=ROOM[id];
+  const signature=game.roomOrder.map(id=>{const room=game.rooms[id];return id+':'+room.level+':'+(room.unlocked?1:0)+':'+(room.construction?Math.round(room.construction.progress*100):'-')+':'+room.name}).join('|');
+  gate('station',signature,()=>{
+    $('station').innerHTML=game.roomOrder.map(id=>{
+      const room=game.rooms[id];
       const status=room.construction?'building':room.level?'open':room.unlocked?'ready':'locked';
       const progress=room.construction?Math.round(room.construction.progress*100):0;
-      return `<button class="room-node ${status}" style="left:${position[0]}%;top:${position[1]}%;width:38%;height:18%;--progress:${progress}%" data-room="${id}" type="button"><b>${room.level?'LV '+room.level:room.unlocked?'BUILD':'LOCKED'}</b><span>${esc(copy.name)}</span></button>`
+      const badge=room.level?'LV '+room.level:room.unlocked?'BUILD':icon('i-lock','icon-sm');
+      return `<button class="room-node ${status}" style="--progress:${progress}%" data-room="${id}" type="button"><span>${esc(room.name)}</span><b>${badge}</b></button>`
+    }).join('');
+  });
+  renderSpots();
+}
+/* Object markers live in scene space rather than inside a room box, because the
+   elevator marker belongs to the shaft, which is outside the room band. */
+function renderSpots(){
+  const game=state.game;
+  const signature=game.objects.map(o=>o.id+':'+(o.action?.enabled?1:0)+':'+(o.action?.type||'-')).join('|');
+  gate('spots',signature,()=>{
+    $('spots').innerHTML=game.objects.map(object=>{
+      const x=OBJECT_X[object.id];
+      if(x===undefined)return '';
+      const ready=Boolean(object.action?.enabled||object.action?.type==='navigate');
+      const attn=Boolean(object.action&&object.id==='generator'&&!game.progression.onboarding.completed);
+      return `<button class="spot ${ready?'ready':''} ${attn?'attn':''}" style="left:${x}%;top:${floorLine(0)}%" data-object="${object.id}" type="button" aria-label="${esc(object.name)}">${icon(OBJECT_ICON[object.id]||'i-package','icon-sm')}</button>`
     }).join('');
   });
 }
-function jobTitle(job){if(job.type==='construction')return (job.targetLevel===1?'Opening ':'Upgrading ')+(ROOM[job.roomId]?.name||'room');return ACTION[job.actionId]?.[0]||'Station operation'}
-function spotForNode(node){const id=String(node||'');if(state.view==='overview')return FLOOR_SPOTS[Math.min(7,state.game.hero.floor||0)];if(id.includes('terminal'))return UNIT_SPOTS.terminal;if(id.includes('analyzer'))return UNIT_SPOTS.analyzer;if(id.includes('generator'))return UNIT_SPOTS.generator;if(id.includes('locker'))return UNIT_SPOTS.locker;if(id.includes('supply'))return UNIT_SPOTS.supply;if(id.includes('elevator'))return id.startsWith('floor_')?UNIT_SPOTS.power:UNIT_SPOTS.elevator;if(id.startsWith('floor_'))return UNIT_SPOTS.power;return UNIT_SPOTS.center}
-function setUnit(unit,spot,mode='idle',baseFacesRight=true){const oldX=Number(unit.dataset.x||spot.x),moved=Math.abs(oldX-spot.x)>.5||Math.abs(Number(unit.dataset.y||spot.y)-spot.y)>.5;if(moved){const direction=spot.x>=oldX?1:-1;unit.style.setProperty('--flip',baseFacesRight?direction:-direction)}unit.style.left=spot.x+'%';unit.style.top=spot.y+'%';unit.dataset.x=spot.x;unit.dataset.y=spot.y;clearTimeout(unit._poseTimer);unit.classList.remove('idle','walking','working','alarm','tired');if(moved){unit.classList.add('walking');unit._poseTimer=setTimeout(()=>{unit.classList.remove('walking');unit.classList.add(mode)},880)}else unit.classList.add(mode)}
+function jobTitle(job){return job.label||'Station operation'}
+
+/* ==========================================================================
+   Movement
+
+   The server already runs a BFS over the station graph and returns the node
+   sequence; the client's only job is to play it back. Each leg is animated on
+   its own, so a trip to another floor reads as walk → ride → walk instead of
+   one diagonal slide through the concrete.
+   ========================================================================== */
+
+const WALK_SPEED=34;   /* percent of scene width per second */
+const RIDE_SPEED=17;   /* percent of scene height per second */
+let walkToken=0;
+
+function placeUnit(unit,x,y,ms=0){
+  unit.style.setProperty('--walk-ms',ms+'ms');
+  unit.style.left=x+'%';
+  unit.style.top=y+'%';
+  unit.dataset.x=x;
+  unit.dataset.y=y;
+}
+function pose(unit,mode){
+  unit.classList.remove('idle','walking','working','alarm','tired','riding');
+  unit.classList.add(mode);
+}
+function currentPoint(unit){
+  return {x:Number(unit.dataset.x??LAB_X.lab_center),y:Number(unit.dataset.y??floorLine(0))};
+}
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+
+/**
+ * Play a node path. Returns once the operator has arrived, or immediately if a
+ * newer walk superseded this one — the token guard stops two overlapping trips
+ * from fighting over the same element.
+ */
+async function walkPath(nodes,restMode='idle'){
+  const unit=$('operatorUnit');
+  const token=++walkToken;
+  const legs=(nodes||[]).filter(Boolean);
+  if(!legs.length){pose(unit,restMode);return}
+  if(reduceMotion.matches){
+    const last=nodePoint(legs[legs.length-1]);
+    placeUnit(unit,last.x,last.y,0);
+    moveCar(last);
+    pose(unit,restMode);
+    return;
+  }
+  for(const node of legs){
+    if(token!==walkToken)return;
+    const to=nodePoint(node);
+    const from=currentPoint(unit);
+    const dx=to.x-from.x,dy=to.y-from.y;
+    if(Math.abs(dx)<0.2&&Math.abs(dy)<0.2)continue;
+    /* Within a floor only x changes; between floors only y does. That is a
+       property of the graph, not an assumption — the shaft is the sole link
+       between levels, so a leg is never truly diagonal. */
+    const riding=Math.abs(dy)>Math.abs(dx);
+    const ms=Math.max(180,Math.round((riding?Math.abs(dy)/RIDE_SPEED:Math.abs(dx)/WALK_SPEED)*1000));
+    if(!riding&&Math.abs(dx)>0.2)unit.style.setProperty('--flip',dx>=0?1:-1);
+    pose(unit,riding?'riding':'walking');
+    if(riding)moveCar(to,ms);
+    placeUnit(unit,to.x,to.y,ms);
+    await sleep(ms);
+  }
+  if(token!==walkToken)return;
+  pose(unit,restMode);
+}
+function moveCar(point,ms=0){
+  const car=$('elevatorCar');
+  car.style.transitionDuration=ms+'ms';
+  car.style.top=floorTop(point.floor)+'%';
+}
 function appearanceStyle(element){const editor=state.editor;element.dataset.gender=editor.gender||'custom';element.style.setProperty('--body-scale',(0.93+Number(editor.build||3)*.018).toFixed(3));element.style.setProperty('--face-scale',(0.955+Number(editor.face||3)*.012).toFixed(3));element.style.setProperty('--hair-color',HAIR[(Number(editor.hair||4)-1)%HAIR.length]);element.style.setProperty('--gear-color',GEAR[(Number(editor.gear||2)-1)%GEAR.length])}
-function equipmentClasses(element){const outfit=state.game.hero.outfit||{};for(const id of Object.keys(ITEM))element.classList.toggle('has-'+id,Object.values(outfit).includes(id));element.classList.remove('rank-1','rank-2','rank-3');element.classList.add('rank-'+Math.min(3,Math.floor((state.game.hero.level-1)/5)+1))}
+function equipmentClasses(element){const outfit=state.game.hero.outfit||{};for(const id of ITEM_IDS)element.classList.toggle('has-'+id,Object.values(outfit).includes(id));element.classList.remove('rank-1','rank-2','rank-3');element.classList.add('rank-'+Math.min(3,Math.floor((state.game.hero.level-1)/5)+1))}
+function restMode(){
+  const game=state.game;
+  if(game.progression.incidents?.active)return 'alarm';
+  if(game.resources.energy<=0)return 'tired';
+  return game.hero.job?'working':'idle';
+}
 function renderUnits(){
-  const game=state.game,operator=$('operatorUnit'),engineer=$('engineerUnit'),job=game.hero.job,incident=Boolean(game.progression.incidents?.active);
+  const game=state.game,operator=$('operatorUnit'),engineer=$('engineerUnit'),incident=Boolean(game.progression.incidents?.active);
   appearanceStyle(operator);equipmentClasses(operator);
   $('operatorUnitLabel').textContent=state.editor.callSign||'Operator';
-  const mode=incident?'alarm':game.resources.energy<=0?'tired':job?'working':'idle';
-  setUnit(operator,spotForNode(game.hero.node),mode,true);
+  /* The server node is authoritative but only moves when the player actually
+     starts something. Polls repeat the same value, so re-placing on every one
+     of them would yank the operator back mid-stride and undo any local walk.
+     Snap only when the server genuinely relocated the hero. */
+  if(!walkInFlight&&game.hero.node!==state.serverNode){
+    state.serverNode=game.hero.node;
+    const point=nodePoint(game.hero.node);
+    placeUnit(operator,point.x,point.y,0);
+    moveCar(point);
+    pose(operator,restMode());
+  }else if(!walkInFlight){
+    pose(operator,restMode());
+  }
   const engineerOpen=Boolean(game.crew?.engineer?.recruited);
   engineer.classList.toggle('hidden',!engineerOpen);
-  if(engineerOpen){const supports=job&&(job.type==='construction'||['repair_power','generator_charge'].includes(job.actionId));const spot=state.view==='overview'?FLOOR_SPOTS[1]:supports?UNIT_SPOTS.power:UNIT_SPOTS.workbench;setUnit(engineer,spot,incident?'alarm':supports?'working':'idle',false)}
+  if(engineerOpen){
+    const job=game.hero.job;
+    const supports=job&&(job.type==='construction'||['repair_power','generator_charge'].includes(job.actionId));
+    const floor=supports&&job.type==='construction'?(game.rooms[job.roomId]?.floor??1):1;
+    placeUnit(engineer,supports?30:66,floorLine(Math.min(FLOORS-1,floor)),400);
+    engineer.style.setProperty('--flip',-1);
+    pose(engineer,incident?'alarm':supports?'working':'idle');
+  }
 }
-function moveOperatorToObject(id){if(state.view!=='lab')setView('lab');setUnit($('operatorUnit'),UNIT_SPOTS[id]||UNIT_SPOTS.center,state.game.progression.incidents?.active?'alarm':'idle',true)}
+let walkInFlight=false;
+/** Walk a server path, holding off position snaps until the trip completes. */
+async function runWalk(path){
+  if(!Array.isArray(path)||!path.length)return;
+  walkInFlight=true;
+  /* The walk ends where the server already believes the hero is, so record it
+     and let the next poll agree instead of re-snapping. */
+  state.serverNode=state.game?.hero?.node;
+  try{await walkPath(path,restMode())}finally{walkInFlight=false}
+}
+const elevatorNode=floor=>floor===0?'lab_elevator':`floor_${floor}_elevator`;
+/**
+ * Route for a move the server was never asked about — tapping an object, or
+ * following a directive. It mirrors the server's graph rather than guessing:
+ * the shaft is the only link between floors, so any cross-floor trip is
+ * "walk to this floor's elevator, ride, walk out of that one".
+ */
+function routeTo(node){
+  const from=nodePoint(state.game.hero.node).floor;
+  const to=nodePoint(node);
+  if(from===to.floor)return [node];
+  return [elevatorNode(from),elevatorNode(to.floor),node];
+}
+/* Tapping an object walks there instead of cutting to it. */
+function moveOperatorToObject(id){
+  const object=state.game.objects.find(entry=>entry.id===id);
+  if(!object?.node)return;
+  runWalk(routeTo(object.node));
+}
 
 /* ==========================================================================
    Crew
@@ -297,7 +458,36 @@ function renderCrew(){
   gate('crewList',JSON.stringify(game.crew),()=>{
     $('crewList').innerHTML=Object.values(game.crew).map(member=>`<div class="crew-row" style="${member.recruited?'':'opacity:.42'}"><div class="mini-avatar">${icon(CREW_ICON[member.id]||'i-users','icon-sm')}</div><div class="row-copy"><b>${esc(member.name)}</b><span>${esc(member.recruited?member.role:member.id==='engineer'?'Recruit after opening the Power Room':'Recruit after opening the Signal Array')}</span></div><span class="row-end">${esc(member.status)}</span></div>`).join('');
   });
-  renderCosmetics();renderReferral();
+  renderSettings();renderCosmetics();renderReferral();
+}
+/* Language lives on the server with the save, not in localStorage: the player
+   picks it once and every device shows the station in that language. The whole
+   payload is re-fetched on switch because every game string is server-owned. */
+const LANGUAGE_OPTIONS=[['en','English'],['ru','Русский']];
+function renderSettings(){
+  const current=state.game.profile.language||'en';
+  gate('settings',current,()=>{
+    $('settingsCard').innerHTML=`<div class="option-row"><div class="row-copy"><b>${LANG_COPY[current].languageTitle}</b><span>${LANG_COPY[current].languageHint}</span></div>${LANGUAGE_OPTIONS.map(([value,label])=>`<button class="${current===value?'active':''}" data-language="${value}" type="button">${label}</button>`).join('')}</div>`;
+  });
+}
+/* The few strings that describe the switch itself have to exist on both sides
+   of it, otherwise the control explaining the language is stuck in one. */
+const LANG_COPY={
+  en:{languageTitle:'Interface language',languageHint:'Applies to the whole station immediately.',saved:'Interface language updated.'},
+  ru:{languageTitle:'Язык интерфейса',languageHint:'Применяется ко всей станции сразу.',saved:'Язык интерфейса обновлён.'}
+};
+async function saveLanguage(language){
+  if(language===state.game.profile.language)return;
+  try{
+    const response=await api('/api/game/profile/language',{method:'POST',body:{language}});
+    /* Every cached block holds server copy in the old language, so the render
+       gates are dropped wholesale rather than one by one. */
+    invalidate(...Object.keys(rendered));
+    setGame(response.game);
+    renderActiveTab();
+    notify(LANG_COPY[response.language].saved);
+    haptic('success');
+  }catch(error){notify(error.message,true);haptic('error')}
 }
 function renderCosmetics(){
   const game=state.game,current=game.profile.cosmetics,owned=new Set(game.progression.commerce.entitlements);
@@ -557,63 +747,61 @@ function paintChart(canvas,market,values){
    Missions
    ========================================================================== */
 
-function renderMissions(){
+/* Operations and Storage are sheets, not tabs. They build their markup on open
+   instead of living in the DOM behind a hidden tab, so nothing renders while
+   it is off screen and there is no gate cache to invalidate on a language
+   switch. `state.sheet` records which one is open so an async load or a poll
+   can repaint it in place. */
+function operationsMarkup(){
   const game=state.game;
-  gate('missions',JSON.stringify(game.tasks),()=>{
-    $('missionList').innerHTML=game.tasks.map(task=>{const copy=taskCopy(task);return `<div class="task-row"><div class="mini-avatar">${icon(TASK_ICON[task.kind]||'i-flag','icon-sm')}</div><div class="row-copy"><b>${esc(copy.title)}</b><span>${esc(copy.desc)}</span></div><button class="secondary" data-task="${esc(task.id)}" type="button">Open</button></div>`}).join('')||'<p>No urgent directives. Expand a room or assess a signal.</p>';
-  });
-  const daily=game.progression.daily;
-  gate('daily',JSON.stringify(daily),()=>{
-    $('dailyCard').innerHTML=`<div class="card-top"><div><h3>Five-signal daily assessment</h3><p>Complete five assessments. The challenge measures accuracy, not clicks.</p></div><span class="tag">${daily.attempts}/5</span></div><div class="progress" style="margin-top:var(--s-4)"><i style="width:${Math.min(100,daily.attempts/5*100)}%"></i></div><div class="chips"><span class="chip">${daily.correct} correct</span><span class="chip gain">${daily.rewardClaimed?'Reward collected':'+5 Parts at 5 attempts'}</span></div>`;
-  });
-  const season=game.progression.season;
-  gate('season',JSON.stringify(season),()=>{
-    $('seasonCard').innerHTML=`<span class="tag warn">${season.id}</span><h3 style="margin-top:var(--s-3)">City Under Glass</h3><p>Your bunker remains permanently. Only the accuracy board refreshes when the ${season.daysRemaining}-day season ends.</p><div class="chips"><span class="chip">${season.attempts} assessments</span><span class="chip">${season.accuracy}% accuracy</span></div>`;
-  });
+  const daily=game.progression.daily,season=game.progression.season;
   const achievements=game.progression.achievements,earned=new Set(achievements.earned);
-  gate('achievements',[...earned].join(','),()=>{
-    $('achievementList').innerHTML=Object.entries(achievements.definitions).map(([id,item])=>`<div class="achievement-row" style="${earned.has(id)?'':'opacity:.45'}"><div class="rank-badge">${earned.has(id)?icon('i-check','icon-sm'):icon('i-target','icon-sm')}</div><div class="row-copy"><b>${esc(item.title)}</b><span>${esc(item.description)}</span></div><span class="row-end">+${item.components} Parts</span></div>`).join('');
-  });
-  if(state.leaderboard)renderLeaderboard();
+  const tasks=game.tasks.map(task=>{const copy=taskCopy(task);return `<div class="task-row"><div class="mini-avatar">${icon(TASK_ICON[task.kind]||'i-flag','icon-sm')}</div><div class="row-copy"><b>${esc(copy.title)}</b><span>${esc(copy.desc)}</span></div><button class="secondary" data-task="${esc(task.id)}" type="button">Open</button></div>`}).join('')
+    ||'<p>No urgent directives. Expand a room or assess a signal.</p>';
+  const board=!state.leaderboard?'<p>Loading the accuracy board…</p>'
+    :state.leaderboard.entries.length?state.leaderboard.entries.map(entry=>`<div class="board-row ${entry.self?'self':''}"><div class="rank-badge">${entry.rank}</div><div class="row-copy"><b>${esc(entry.name)}</b><span>Level ${entry.level} · ${entry.attempts} assessments</span></div>${entry.subscriber?'<span class="tag">Pass</span>':''}<span class="row-end">${entry.accuracy}%</span></div>`).join('')
+    :'<p>Complete an assessment to enter the 30-day accuracy board.</p>';
+  return `<div class="card">${tasks}</div>`
+    +`<div class="section-title">Daily training</div><div class="card"><div class="card-top"><div><h3>Five-signal daily assessment</h3><p>Complete five assessments. The challenge measures accuracy, not clicks.</p></div><span class="tag">${daily.attempts}/5</span></div><div class="progress" style="margin-top:var(--s-4)"><i style="width:${Math.min(100,daily.attempts/5*100)}%"></i></div><div class="chips"><span class="chip">${daily.correct} correct</span><span class="chip gain">${daily.rewardClaimed?'Reward collected':'+5 Parts at 5 attempts'}</span></div></div>`
+    +`<div class="section-title">Season</div><div class="card season amber"><span class="tag warn">${season.id}</span><h3 style="margin-top:var(--s-3)">City Under Glass</h3><p>Your bunker remains permanently. Only the accuracy board refreshes when the ${season.daysRemaining}-day season ends.</p><div class="chips"><span class="chip">${season.attempts} assessments</span><span class="chip">${season.accuracy}% accuracy</span></div></div>`
+    +`<div class="section-title">Accuracy leaderboard</div><div class="card">${board}</div>`
+    +`<div class="section-title">Achievements</div><div class="card">${Object.entries(achievements.definitions).map(([id,item])=>`<div class="achievement-row" style="${earned.has(id)?'':'opacity:.45'}"><div class="rank-badge">${earned.has(id)?icon('i-check','icon-sm'):icon('i-target','icon-sm')}</div><div class="row-copy"><b>${esc(item.title)}</b><span>${esc(item.description)}</span></div><span class="row-end">+${item.components} Parts</span></div>`).join('')}</div>`;
 }
-function renderLeaderboard(){
-  const data=state.leaderboard;
-  gate('leaderboard',JSON.stringify(data),()=>{
-    $('leaderboardList').innerHTML=data.entries.length?data.entries.map(entry=>`<div class="board-row ${entry.self?'self':''}"><div class="rank-badge">${entry.rank}</div><div class="row-copy"><b>${esc(entry.name)}</b><span>Level ${entry.level} · ${entry.attempts} assessments</span></div>${entry.subscriber?'<span class="tag">Pass</span>':''}<span class="row-end">${entry.accuracy}%</span></div>`).join(''):'<p>Complete an assessment to enter the 30-day accuracy board.</p>';
-  });
-}
-async function loadLeaderboard(){try{state.leaderboard=await api('/api/game/leaderboard');renderLeaderboard()}catch(error){$('leaderboardList').innerHTML='<p>'+esc(error.message)+'</p>'}}
-
-/* ==========================================================================
-   Storage
-   ========================================================================== */
-
-function renderStorage(){
+function storageMarkup(){
   const game=state.game,inventory=game.progression.inventory;
-  gate('storage',JSON.stringify(inventory.owned)+'|'+JSON.stringify(game.hero.outfit),()=>{
-    $('storageList').innerHTML=Object.entries(inventory.items).map(([id,item])=>{
-      const owned=inventory.owned.includes(id),equipped=Object.values(game.hero.outfit).includes(id),copy=ITEM[id]||[item.name,item.effect];
-      return `<div class="item-row" style="${owned?'':'opacity:.42'}"><div class="item-icon">${icon('i-package','icon-sm')}</div><div class="row-copy"><b>${esc(copy[0])}</b><span>${esc(copy[1])}</span></div><button class="secondary" data-equip="${id}" type="button" ${owned?'':'disabled'}>${equipped?'Equipped':'Equip'}</button></div>`
-    }).join('');
-  });
-  renderShop();
-  const triggers=game.progression.conversionTriggers;
-  $('conversionCard').classList.toggle('hidden',!triggers.length);
-  gate('conversion',triggers.length?triggers[0].title:'none',()=>{
-    if(triggers.length)$('conversionCard').innerHTML=`<h3>Live terminal unlocked</h3><p>${esc(triggers[0].title)} This continues the action you already learned in the Lab.</p><button class="primary full" data-live-scan type="button">Open XRadar terminal</button>`;
-  });
-}
-function renderShop(){
-  if(!state.catalog){$('shopList').innerHTML='<div class="card"><p>Station support catalog is loading.</p></div>';return}
-  gate('shop',JSON.stringify(state.catalog.products.map(product=>product.id)),()=>{
-    $('shopList').innerHTML=state.catalog.products.map(product=>{
+  const items=Object.entries(inventory.items).map(([id,item])=>{
+    const owned=inventory.owned.includes(id),equipped=Object.values(game.hero.outfit).includes(id);
+    return `<div class="item-row" style="${owned?'':'opacity:.42'}"><div class="item-icon">${icon('i-package','icon-sm')}</div><div class="row-copy"><b>${esc(item.name)}</b><span>${esc(item.effect)}</span></div><button class="secondary" data-equip="${id}" type="button" ${owned?'':'disabled'}>${equipped?'Equipped':'Equip'}</button></div>`
+  }).join('');
+  const shop=!state.catalog?'<div class="card"><p>Station support catalog is loading.</p></div>'
+    :state.catalog.products.map(product=>{
       const available=product.starsEnabled||product.tonEnabled||state.config.allowDevAuth;
       const price=product.starsEnabled?product.stars+' Stars':product.tonEnabled?(Number(product.tonNano)/1e9)+' TON':'Local demo';
       return `<div class="shop-card"><h3>${esc(product.name)}</h3><p>${esc(product.description)}</p><button data-buy="${product.id}" data-method="${product.starsEnabled?'stars':product.tonEnabled?'ton':'demo'}" type="button" ${available?'':'disabled'}>${price}</button></div>`
     }).join('');
-  });
+  const triggers=game.progression.conversionTriggers;
+  const conversion=triggers.length?`<div class="card accent"><h3>Live terminal unlocked</h3><p>${esc(triggers[0].title)} This continues the action you already learned in the Lab.</p><button class="primary full" data-live-scan type="button">Open XRadar terminal</button></div>`:'';
+  return `<div class="card">${items}</div><div class="section-title">Station support</div><div class="shop-list">${shop}</div>${conversion}`;
 }
-async function loadCatalog(){try{state.catalog=await api('/api/game/commerce/catalog');invalidate('shop');renderShop()}catch(error){$('shopList').innerHTML='<div class="card"><p>'+esc(error.message)+'</p></div>'}}
+function openOperations(){
+  state.sheet='operations';
+  openSheet('Operations','DIRECTIVES · SEASON · RECORDS',operationsMarkup());
+  if(!state.leaderboard)loadLeaderboard();
+  tone(560);
+}
+function openStorage(){
+  state.sheet='storage';
+  openSheet('Equipment Locker','INVENTORY · STATION SUPPORT',storageMarkup());
+  if(!state.catalog)loadCatalog();
+  tone(560);
+}
+/** Repaint whichever sheet is open after an async load or a state change. */
+function refreshSheet(){
+  if(state.sheet==='operations')$('sheetBody').innerHTML=operationsMarkup();
+  else if(state.sheet==='storage')$('sheetBody').innerHTML=storageMarkup();
+}
+async function loadLeaderboard(){try{state.leaderboard=await api('/api/game/leaderboard');refreshSheet()}catch{state.leaderboard={entries:[]};refreshSheet()}}
+async function loadCatalog(){try{state.catalog=await api('/api/game/commerce/catalog');refreshSheet()}catch{}}
 
 function renderReturn(){const report=state.game.progression.returnReport;$('returnModal').classList.toggle('hidden',!report);if(!report)return;let text='The station produced '+fmt(report.data)+' Intel during '+Number(report.hours||0).toFixed(1)+' productive hours.';if(report.full)text+=' Storage filled after '+report.capacityHours+' hours and production stopped for '+Number(report.stoppedHours||0).toFixed(1)+' hours.';if(report.streak)text+=' Login streak day '+report.streak.day+': +'+report.streak.components+' Parts'+(report.streak.passComponents?' and +'+report.streak.passComponents+' Pass Parts':'')+'.';$('returnText').textContent=text}
 function resourceFly(text){const element=document.createElement('span');element.className='resource-fly';element.textContent=text;$('resourceFx').append(element);setTimeout(()=>element.remove(),1000)}
@@ -626,30 +814,34 @@ function setTab(tab){
   state.tab=tab;
   qa('.tab').forEach(element=>element.classList.toggle('active',element.id==='tab-'+tab));
   qa('[data-tab]').forEach(element=>element.classList.toggle('active',element.dataset.tab===tab));
-  /* One rail slides between five items instead of five blobs fading. */
+  /* One rail slides between the three items instead of blobs fading. */
   $('nav').style.setProperty('--nav-index',TAB_INDEX[tab]??0);
   closeSheet();tone(420);haptic('select');
   if(tab==='signals'&&!state.signalId){state.factors.clear();state.lastResult=null;invalidate('signals')}
   renderActiveTab();
-  if(tab==='missions'&&!state.leaderboard)loadLeaderboard();
-  if(tab==='storage'&&!state.catalog)loadCatalog();
   syncBackButton();
 }
-function setView(view){state.view=view;$('sceneMedia').className='scene-media focus-'+view;qa('[data-view]').forEach(button=>button.classList.toggle('active',button.dataset.view===view));$('sceneTitle').textContent=view==='overview'?'Full station':'Command Lab';renderUnits();tone(360);haptic('select')}
+/* The cutaway shows every floor at once, so there is no longer a camera to
+   switch. The function survives only so the call sites that used to change view
+   keep working; it now just names what is on screen. */
+function setView(view){state.view=view;$('sceneTitle').textContent='Station'}
 function openSheet(title,status,html){$('sheetTitle').textContent=title;$('sheetStatus').textContent=status;$('sheetBody').innerHTML=html;$('sheet').classList.add('open');syncBackButton()}
-function closeSheet(){$('sheet').classList.remove('open');syncBackButton()}
+function closeSheet(){state.sheet=null;$('sheet').classList.remove('open');syncBackButton()}
 function costMarkup(action){const cost=action.cost||{},reward=action.reward||{};return '<div class="chips">'+(cost.energy?'<span class="chip cost">−'+cost.energy+' Power</span>':'')+(cost.data?'<span class="chip cost">−'+fmt(cost.data)+' Intel</span>':'')+(cost.components?'<span class="chip cost">−'+cost.components+' Parts</span>':'')+(reward.data?'<span class="chip gain">+'+reward.data+' Intel</span>':'')+(reward.components?'<span class="chip gain">+'+reward.components+' Parts</span>':'')+(reward.xp?'<span class="chip gain">+'+reward.xp+' XP</span>':'')+(action.durationMs?'<span class="chip">'+duration(action.durationMs)+'</span>':'')+'</div>'}
-function openObject(id){const object=state.game.objects.find(entry=>entry.id===id);if(!object)return;const copy=OBJECT[id]||[object.name,'Station system.'];let html='<p class="sheet-desc">'+esc(copy[1])+'</p>';if(id==='elevator')html+='<button class="primary sheet-action" data-view-open="overview" type="button">Open full station</button>';if(object.action){if(object.action.type==='navigate')html+='<button class="primary sheet-action" data-navigate="'+esc(object.action.target)+'" type="button">'+(object.action.target==='map'?'Open intercepted signals':'Open equipment storage')+'</button>';else if(object.action.type==='build')html+=costMarkup(object.action)+'<button class="primary sheet-action" data-build="'+esc(object.action.roomId)+'" type="button" '+(object.action.enabled?'':'disabled')+'>'+esc(object.action.label||'Build room')+'</button>';else{const action=actionCopy(object.action);html+='<p class="sheet-desc">'+esc(action[1])+'</p>'+costMarkup(object.action)+'<button class="primary sheet-action" data-action="'+esc(object.action.id)+'" type="button" '+(object.action.enabled?'':'disabled')+'>'+esc(action[0])+'</button>'}}else html+='<div class="card"><h3>System standing by</h3><p>No manual operation is currently required.</p></div>';openSheet(copy[0],object.status||'Station object',html);tone(560)}
-function openRoom(id){const room=state.game.rooms[id],copy=ROOM[id];if(!room||!copy)return;let html=`<p class="sheet-desc">${esc(copy.desc)}</p><div class="card accent"><h3>Gameplay effect</h3><p>${esc(copy.effect)}</p></div>`;if(room.construction){html+=`<div class="card amber"><h3>Construction in progress</h3><p>Level ${room.construction.targetLevel} · ${duration(room.construction.remainingMs)} remaining</p><div class="progress" style="margin-top:var(--s-3)"><i style="width:${Math.round(room.construction.progress*100)}%"></i></div></div>`}else if(!room.level&&!room.unlocked){html+=`<div class="card"><h3>Locked foundation</h3><p>${esc(room.lockReason)}</p></div>`}else if(room.nextUpgrade){html+=`<div class="card"><div class="card-top"><div><h3>${room.level?'Upgrade to level '+room.nextUpgrade.level:'Open room'}</h3><p>Maximum level is 10.</p></div><span class="tag">LV ${room.level}</span></div>${costMarkup({cost:room.nextUpgrade,durationMs:room.nextUpgrade.durationMs})}</div><button class="primary sheet-action" data-build="${id}" type="button">${room.level?'Start upgrade':'Open room'}</button>`}else html+='<div class="card"><h3>Level 10 reached</h3><p>This room is fully upgraded.</p></div>';openSheet(copy.name,room.level?'LEVEL '+room.level:room.unlocked?'FOUNDATION READY':'LOCKED',html)}
-function followTask(task){if(!task)return;if(task.target==='map'){setTab('signals');return}setTab('lab');const id=({bunker:'terminal',inventory:'locker'})[task.target]||task.target;if(id==='elevator'){setView('overview');return}setView('lab');setTimeout(()=>openObject(id),260)}
+function openObject(id){const object=state.game.objects.find(entry=>entry.id===id);if(!object)return;const copy=[object.name,object.description||''];let html='<p class="sheet-desc">'+esc(copy[1])+'</p>';if(object.action){if(object.action.type==='navigate')html+='<button class="primary sheet-action" data-navigate="'+esc(object.action.target)+'" type="button">'+(object.action.target==='map'?'Open intercepted signals':'Open equipment storage')+'</button>';else if(object.action.type==='build')html+=costMarkup(object.action)+'<button class="primary sheet-action" data-build="'+esc(object.action.roomId)+'" type="button" '+(object.action.enabled?'':'disabled')+'>'+esc(object.action.label||'Build room')+'</button>';else{const action=actionCopy(object.action);html+='<p class="sheet-desc">'+esc(action[1])+'</p>'+costMarkup(object.action)+'<button class="primary sheet-action" data-action="'+esc(object.action.id)+'" type="button" '+(object.action.enabled?'':'disabled')+'>'+esc(action[0])+'</button>'}}else html+='<div class="card"><h3>System standing by</h3><p>No manual operation is currently required.</p></div>';openSheet(copy[0],object.status||'Station object',html);tone(560)}
+function openRoom(id){const room=state.game.rooms[id];if(!room)return;let html=`<p class="sheet-desc">${esc(room.short)}</p><div class="card accent"><h3>Gameplay effect</h3><p>${esc(room.effect)}</p></div>`;if(room.construction){html+=`<div class="card amber"><h3>Construction in progress</h3><p>Level ${room.construction.targetLevel} · ${duration(room.construction.remainingMs)} remaining</p><div class="progress" style="margin-top:var(--s-3)"><i style="width:${Math.round(room.construction.progress*100)}%"></i></div></div>`}else if(!room.level&&!room.unlocked){html+=`<div class="card"><h3>Locked foundation</h3><p>${esc(room.lockReason)}</p></div>`}else if(room.nextUpgrade){html+=`<div class="card"><div class="card-top"><div><h3>${room.level?'Upgrade to level '+room.nextUpgrade.level:'Open room'}</h3><p>Maximum level is 10.</p></div><span class="tag">LV ${room.level}</span></div>${costMarkup({cost:room.nextUpgrade,durationMs:room.nextUpgrade.durationMs})}</div><button class="primary sheet-action" data-build="${id}" type="button">${room.level?'Start upgrade':'Open room'}</button>`}else html+='<div class="card"><h3>Level 10 reached</h3><p>This room is fully upgraded.</p></div>';openSheet(room.name,room.level?'LEVEL '+room.level:room.unlocked?'FOUNDATION READY':'LOCKED',html)}
+function followTask(task){if(!task)return;if(task.target==='map'){setTab('signals');return}setTab('lab');const id=({bunker:'terminal',inventory:'locker'})[task.target]||task.target;moveOperatorToObject(id);setTimeout(()=>openObject(id),620)}
 
 /* ==========================================================================
    Actions
    ========================================================================== */
 
-async function startAction(id){try{const response=await api('/api/game/action/start',{method:'POST',body:{actionId:id}});closeSheet();setGame(response.game);tone(690);haptic('medium')}catch(error){notify(error.message,true);haptic('error')}}
-async function startBuild(id){try{const response=await api('/api/game/build',{method:'POST',body:{roomId:id}});closeSheet();setGame(response.game);setView('overview');tone(690);haptic('medium')}catch(error){notify(error.message,true);haptic('error')}}
-async function equip(id){try{const response=await api('/api/game/inventory/equip',{method:'POST',body:{itemId:id}});invalidate('storage');setGame(response.game);notify('Equipment updated and visible on the operator.');tone(640);haptic('success')}catch(error){notify(error.message,true);haptic('error')}}
+/* `response.path` is the node sequence the server walked to reach the target.
+   It was computed on every one of these routes and thrown away by the old
+   client, which is why the operator used to slide straight through walls. */
+async function startAction(id){try{const response=await api('/api/game/action/start',{method:'POST',body:{actionId:id}});closeSheet();setGame(response.game);runWalk(response.path);tone(690);haptic('medium')}catch(error){notify(error.message,true);haptic('error')}}
+async function startBuild(id){try{const response=await api('/api/game/build',{method:'POST',body:{roomId:id}});closeSheet();setGame(response.game);runWalk(response.path);tone(690);haptic('medium')}catch(error){notify(error.message,true);haptic('error')}}
+async function equip(id){try{const response=await api('/api/game/inventory/equip',{method:'POST',body:{itemId:id}});setGame(response.game);refreshSheet();notify('Equipment updated and visible on the operator.');tone(640);haptic('success')}catch(error){notify(error.message,true);haptic('error')}}
 async function assess(decision){const signal=state.game.progression.recon.signals.find(entry=>entry.id===state.signalId);if(!signal)return;state.lastExpected=expectedFactors(signal);state.lastVisible=visibleFactors(signal);try{const response=await api('/api/game/recon/resolve',{method:'POST',body:{signalId:signal.id,decision}});state.lastResult=response.result;state.game=response.game;invalidate('signals');renderAll();setTab('signals');state.lastResult=response.result;invalidate('signals');renderSignals();tone(response.result.correct?820:240,.13);haptic(response.result.correct?'success':'warning');schedulePoll()}catch(error){notify(error.message,true);haptic('error')}}
 async function syncLive(){try{const response=await api('/api/game/recon/sync-live',{method:'POST',body:{}});state.signalId=null;invalidate('signals');setGame(response.game);notify('Live XRadar wave loaded.')}catch(error){notify(error.message,true)}}
 function openLiveScan(){const url=state.config?.xradarBaseUrl;if(url){try{if(tg?.openLink)tg.openLink(url);else window.open(url,'_blank','noopener')}catch{window.open(url,'_blank','noopener')}}else notify('Connect XRADAR_BASE_URL to enable live scans.')}
@@ -657,7 +849,7 @@ async function saveOperator(){state.editor.callSign=$('callSign').value.trim()||
 async function saveCosmetic(key,value){const cosmetics={...state.game.profile.cosmetics,[key]:value};try{const response=await api('/api/game/profile/cosmetics',{method:'POST',body:cosmetics});invalidate('cosmetics');setGame(response.game);notify('Station appearance updated.');haptic('select')}catch(error){notify(error.message,true)}}
 async function connectReferral(){const code=$('referralInput')?.value.trim();if(!code)return notify('Enter a referral code.',true);try{const response=await api('/api/game/referral/connect',{method:'POST',body:{code,deviceId:deviceId()}});invalidate('referral');setGame(response.game);notify('Referral connected. It qualifies after level 3 and one signal.')}catch(error){notify(error.message,true)}}
 function showIncidentSheet(){const incident=state.game.progression.incidents.active;if(!incident)return;renderLab();setView('lab');tone(210,.18);setTimeout(()=>tone(260,.18),260);haptic('error');openSheet(incident.title,'TACTICAL INCIDENT',`<p class="sheet-desc">${esc(incident.description)}</p><div class="card amber"><h3>Choose a countermeasure</h3><p>Each response has a different Power cost and recovery reward.</p></div>${incident.options.map((option,index)=>`<button class="${index?'secondary':'primary'} sheet-action" data-incident-action="${option.id}" type="button">${esc(option.label)} · −${option.energy} Power · +${option.reward.data||0} Intel${option.reward.components?' · +'+option.reward.components+' Parts':''}</button>`).join('')}`)}
-async function openIncident(){if(!state.game.progression.onboarding.completed){setTab('missions');notify('Complete the restoration protocol first.');return}if(state.game.progression.incidents?.active){showIncidentSheet();return}if(!state.game.progression.incidents?.ready){notify('Security systems are still analyzing the last incident.');return}try{const response=await api('/api/game/incident/start',{method:'POST',body:{}});setGame(response.game);showIncidentSheet()}catch(error){notify(error.message,true);haptic('error')}}
+async function openIncident(){if(!state.game.progression.onboarding.completed){openOperations();notify('Complete the restoration protocol first.');return}if(state.game.progression.incidents?.active){showIncidentSheet();return}if(!state.game.progression.incidents?.ready){notify('Security systems are still analyzing the last incident.');return}try{const response=await api('/api/game/incident/start',{method:'POST',body:{}});setGame(response.game);showIncidentSheet()}catch(error){notify(error.message,true);haptic('error')}}
 async function resolveIncident(action){try{const response=await api('/api/game/incident/resolve',{method:'POST',body:{action}});closeSheet();setGame(response.game);notify(response.result.message);tone(820,.14);haptic('success')}catch(error){notify(error.message,true);haptic('error')}}
 function resourceInfo(type){const game=state.game,copy={intel:['Intel','Produced by the Command Lab. Automation increases offline production.','Current production: '+fmt(game.resources.productionPerHour)+'/h · offline '+fmt(game.resources.offlineProductionPerHour)+'/h · storage '+game.resources.offlineCapacityHours+'h'],power:['Power','Limits active operations and construction. The Power Room raises capacity and regeneration.','Regeneration: '+fmt(game.resources.energyRegenPerHour)+'/h'],parts:['Parts','Never produced passively. Earn them from supplies, streaks, assessments, achievements and qualified referrals.','Next supply: '+(game.progression.supply.ready?'ready now':duration(game.progression.supply.remainingMs))]};const item=copy[type];openSheet(item[0],'RESOURCE',`<p class="sheet-desc">${item[1]}</p><div class="card accent"><h3>Current rule</h3><p>${item[2]}</p></div>`)}
 
@@ -679,7 +871,7 @@ document.addEventListener('click',event=>{
   if(button.dataset.roomFocus){setTab('lab');setView('overview');setTimeout(()=>openRoom(button.dataset.roomFocus),220);return}
   if(button.dataset.action){startAction(button.dataset.action);return}
   if(button.dataset.build){startBuild(button.dataset.build);return}
-  if(button.dataset.navigate){closeSheet();setTab(button.dataset.navigate==='map'?'signals':'storage');return}
+  if(button.dataset.navigate){closeSheet();if(button.dataset.navigate==='map')setTab('signals');else openStorage();return}
   if(button.dataset.signalOpen){state.signalId=button.dataset.signalOpen;state.factors.clear();invalidate('signals');renderSignals();syncBackButton();tone(570);haptic('light');return}
   if(button.hasAttribute('data-signal-back')){state.signalId=null;state.factors.clear();invalidate('signals');renderSignals();syncBackButton();return}
   if(button.dataset.factor){toggleFactor(button);return}
@@ -691,6 +883,7 @@ document.addEventListener('click',event=>{
   if(button.dataset.task){followTask(state.game.tasks.find(task=>task.id===button.dataset.task));return}
   if(button.dataset.incidentAction){resolveIncident(button.dataset.incidentAction);return}
   if(button.dataset.gender){state.editor.gender=button.dataset.gender;state.editorDirty=true;haptic('select');invalidate('crewStats');renderCrew();renderUnits();return}
+  if(button.dataset.language){saveLanguage(button.dataset.language);return}
   if(button.dataset.cosmeticKey){saveCosmetic(button.dataset.cosmeticKey,button.dataset.cosmeticValue);return}
   if(button.hasAttribute('data-referral-connect')){connectReferral();return}
   if(button.dataset.buy){purchase(button.dataset.buy,button.dataset.method);return}
@@ -720,6 +913,7 @@ document.addEventListener('input',event=>{
 $('saveOperator').addEventListener('click',saveOperator);
 $('sheetClose').addEventListener('click',closeSheet);
 $('goalButton').addEventListener('click',()=>followTask(state.game?.recommendedTask));
+$('operationsButton').addEventListener('click',openOperations);
 $('incidentButton').addEventListener('click',openIncident);
 $('soundButton').addEventListener('click',()=>{setAmbient(!state.sound);tone(620);haptic('light')});
 $('levelButton').addEventListener('click',()=>setTab('crew'));
@@ -737,7 +931,6 @@ async function enterGame(){
   setView('lab');
   setAmbient(state.sound);
   syncBackButton();
-  loadCatalog().catch(()=>{});
 }
 async function authenticate(body){const startParam=tg?.initDataUnsafe?.start_param||new URLSearchParams(location.search).get('ref')||'';const response=await api('/api/auth/telegram',{method:'POST',body:{...body,deviceId:deviceId(),referralCode:startParam}});if(response.referralError)notify(englishError(response.referralError,'Referral could not be connected.'),true);await enterGame()}
 async function boot(){

@@ -40,6 +40,10 @@ export class PlayerStore {
       telegramId,
       firstName: user.first_name || 'Operator',
       username: user.username || null,
+      // Seed from the Telegram client locale on first contact only. After that
+      // the player's own choice owns the field and must not be overwritten by
+      // every re-auth.
+      language: user.language_code || undefined,
       now
     });
     await this.players.updateOne(

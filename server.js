@@ -16,7 +16,8 @@ import {
   startConstruction,
   startObjectAction,
   updateAppearance,
-  updateCosmetics
+  updateCosmetics,
+  updateLanguage
 } from './gameEngine.js';
 import { PRODUCT_CATALOG, catalogView, createStarsInvoiceLink, tonPaymentRequest, validateProduct, verifyTonTransaction } from './commerce.js';
 import { XRadarClient } from './xradarClient.js';
@@ -302,6 +303,14 @@ export function createApp({ store, config = getConfig() }) {
       updateCosmetics(current, req.body);
     }, now);
     res.json({ ok: true, cosmetics: player.profile.cosmetics, game: publicGameState(player, now) });
+  }));
+
+  app.post('/api/game/profile/language', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const now = new Date();
+    const player = await store.mutate(req.session.telegramId, current => {
+      updateLanguage(current, req.body?.language);
+    }, now);
+    res.json({ ok: true, language: player.profile.language, game: publicGameState(player, now) });
   }));
 
   app.post('/api/game/referral/connect', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {

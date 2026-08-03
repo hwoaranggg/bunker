@@ -1,3 +1,7 @@
+import { copyFor, normalizeLanguage, DEFAULT_LANGUAGE, LANGUAGES } from './content.js';
+
+export { LANGUAGES, DEFAULT_LANGUAGE };
+
 export const SCHEMA_VERSION = 5;
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const RECON_INTERVAL_MS = 4 * 60 * 60 * 1000;
@@ -8,64 +12,26 @@ export const ROOM_ORDER = Object.freeze([
   'lab', 'power', 'workshop', 'comms', 'automation', 'antenna', 'analysis', 'interceptor'
 ]);
 
+/* Structure only. Every room name, blurb and effect line lives in content.js,
+   keyed by this same id, and is resolved against the player's language when the
+   public state is built. */
 export const ROOM_DEFS = Object.freeze({
-  lab: {
-    floor: 0,
-    name: 'Command Lab',
-    short: 'The intelligence terminal and central operations floor.',
-    effect: 'Produces Intel. Higher levels sharply increase hourly output.',
-    xradar: 'Trading terminal and core analytics'
-  },
-  power: {
-    floor: 1,
-    name: 'Power Room',
-    short: 'The station grid, reserve cells and emergency machinery.',
-    effect: '+25 maximum Power and faster regeneration per level.',
-    xradar: 'Reliable infrastructure'
-  },
-  workshop: {
-    floor: 2,
-    name: 'Workshop & Storage',
-    short: 'Engineering tools, recovered parts and protected storage.',
-    effect: 'Extends offline storage and discounts late upgrades.',
-    xradar: 'Position protection and tooling'
-  },
-  comms: {
-    floor: 3,
-    name: 'Communications Hub',
-    short: 'A low-latency backbone for every station system.',
-    effect: 'Reduces all construction time by 4% per level, up to 40%.',
-    xradar: 'Live market data stream'
-  },
-  automation: {
-    floor: 4,
-    name: 'Automation Servers',
-    short: 'Autonomous market monitoring while the operator is away.',
-    effect: '+15% offline Intel production per level.',
-    xradar: 'Automated monitoring'
-  },
-  antenna: {
-    floor: 5,
-    name: 'Signal Array',
-    short: 'Receives larger batches of external market observations.',
-    effect: 'Adds more signals to each intelligence wave.',
-    xradar: 'New token feed'
-  },
-  analysis: {
-    floor: 6,
-    name: 'Risk Analysis Center',
-    short: 'Reveals risk bands, mint authority and holder concentration.',
-    effect: 'More evidence becomes visible at levels 3, 6 and 9.',
-    xradar: 'Safety scoring'
-  },
-  interceptor: {
-    floor: 7,
-    name: 'Wallet Interceptor',
-    short: 'Observes coordinated activity from large wallets.',
-    effect: 'Shows smart-wallet activity and enables rare Part finds.',
-    xradar: 'Smart-wallet leaderboard'
-  }
+  lab: { floor: 0 },
+  power: { floor: 1 },
+  workshop: { floor: 2 },
+  comms: { floor: 3 },
+  automation: { floor: 4 },
+  antenna: { floor: 5 },
+  analysis: { floor: 6 },
+  interceptor: { floor: 7 }
 });
+
+/** Player language, tolerant of half-migrated saves. */
+export function playerLanguage(player) {
+  return normalizeLanguage(player?.profile?.language);
+}
+
+const roomName = (roomId, lang) => copyFor(lang).rooms[roomId].name;
 
 export const LEVEL_CURVE = Object.freeze({
   1: { data: 50, components: 0, durationMs: 30_000, production: 10 },
@@ -86,71 +52,45 @@ const ROOM_FACTORS = Object.freeze({
 });
 
 export const ACHIEVEMENT_DEFS = Object.freeze({
-  level_five_room: { title: 'Deep specialization', description: 'Upgrade any room to level 5.', components: 5 },
-  full_station: { title: 'Station complete', description: 'Open all eight station rooms.', components: 10 },
-  veteran_operator: { title: 'Veteran operator', description: 'Reach operator level 10.', components: 15 }
+  level_five_room: { components: 5 },
+  full_station: { components: 10 },
+  veteran_operator: { components: 15 }
 });
 
 export const INCIDENT_DEFS = Object.freeze({
   security_breach: {
-    title: 'Security breach',
-    description: 'An unknown device is probing the station network while the surface lock reports forced entry.',
     outcomes: {
-      lockdown: { label: 'Lock down the elevator', energy: 8, reward: { data: 25, components: 1, xp: 20 }, message: 'Elevator sealed. The intrusion team withdrew.' },
-      isolate: { label: 'Isolate the signal network', energy: 5, reward: { data: 70, components: 0, xp: 16 }, message: 'Signal network isolated. The hostile probe was contained.' }
+      lockdown: { energy: 8, reward: { data: 25, components: 1, xp: 20 } },
+      isolate: { energy: 5, reward: { data: 70, components: 0, xp: 16 } }
     }
   },
   coolant_leak: {
-    title: 'Coolant leak',
-    description: 'A fractured coolant line is overheating the automation racks.',
     outcomes: {
-      vent: { label: 'Vent the server room', energy: 4, reward: { data: 35, components: 1, xp: 18 }, message: 'Pressure released. The racks are stable.' },
-      seal: { label: 'Seal and recycle coolant', energy: 7, reward: { data: 20, components: 2, xp: 22 }, message: 'The fracture was sealed and spare material recovered.' }
+      vent: { energy: 4, reward: { data: 35, components: 1, xp: 18 } },
+      seal: { energy: 7, reward: { data: 20, components: 2, xp: 22 } }
     }
   },
   power_surge: {
-    title: 'Grid overload',
-    description: 'A surface surge is cascading through the lower station grid.',
     outcomes: {
-      reroute: { label: 'Reroute through reserve cells', energy: 10, reward: { data: 55, components: 1, xp: 24 }, message: 'The surge was absorbed by reserve cells.' },
-      shutdown: { label: 'Shut down noncritical systems', energy: 3, reward: { data: 30, components: 0, xp: 16 }, message: 'Noncritical systems went dark and the grid recovered.' }
+      reroute: { energy: 10, reward: { data: 55, components: 1, xp: 24 } },
+      shutdown: { energy: 3, reward: { data: 30, components: 0, xp: 16 } }
     }
   },
   signal_spoof: {
-    title: 'Spoofed market signal',
-    description: 'A forged feed is attempting to poison the station analysis models.',
     outcomes: {
-      trace: { label: 'Trace the hostile relay', energy: 6, reward: { data: 85, components: 1, xp: 24 }, message: 'The relay was traced and its data cache recovered.' },
-      purge: { label: 'Purge the contaminated feed', energy: 4, reward: { data: 40, components: 0, xp: 18 }, message: 'The forged feed was removed before it reached analysis.' }
+      trace: { energy: 6, reward: { data: 85, components: 1, xp: 24 } },
+      purge: { energy: 4, reward: { data: 40, components: 0, xp: 18 } }
     }
   }
 });
 
 export const ITEM_DEFS = Object.freeze({
-  field_coat: {
-    name: 'Field Operations Coat', slot: 'body', effect: 'Standard protection for underground work.',
-    bonus: {}
-  },
-  insulated_gloves: {
-    name: 'Insulated Gloves', slot: 'tool', effect: 'Work actions complete 5% faster.',
-    bonus: { workSpeed: 0.05 }
-  },
-  analyst_goggles: {
-    name: 'Analyst Optics', slot: 'head', effect: 'Adds a visible analysis aid to the operator.',
-    bonus: { analysis: 1 }
-  },
-  utility_vest: {
-    name: 'Utility Harness', slot: 'body', effect: 'Late upgrades cost fewer Parts.',
-    bonus: { componentDiscount: 1 }
-  },
-  field_tablet: {
-    name: 'Field Tablet', slot: 'tool', effect: 'Adds one extra intercepted signal.',
-    bonus: { extraSignal: 1 }
-  },
-  headlamp: {
-    name: 'Industrial Headlamp', slot: 'head', effect: 'Work on new levels completes 5% faster.',
-    bonus: { workSpeed: 0.05 }
-  }
+  field_coat: { slot: 'body', bonus: {} },
+  insulated_gloves: { slot: 'tool', bonus: { workSpeed: 0.05 } },
+  analyst_goggles: { slot: 'head', bonus: { analysis: 1 } },
+  utility_vest: { slot: 'body', bonus: { componentDiscount: 1 } },
+  field_tablet: { slot: 'tool', bonus: { extraSignal: 1 } },
+  headlamp: { slot: 'head', bonus: { workSpeed: 0.05 } }
 });
 
 export const NAV_POINTS = Object.freeze(createNavigationPoints());
@@ -159,7 +99,7 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const asMs = value => value instanceof Date ? value.getTime() : new Date(value).getTime();
 const dayKey = value => new Date(value).toISOString().slice(0, 10);
 
-export function createPlayer({ telegramId, firstName = 'Operator', username = null, now = new Date() }) {
+export function createPlayer({ telegramId, firstName = 'Operator', username = null, language = DEFAULT_LANGUAGE, now = new Date() }) {
   const timestamp = new Date(now);
   const player = {
     schemaVersion: SCHEMA_VERSION,
@@ -167,6 +107,7 @@ export function createPlayer({ telegramId, firstName = 'Operator', username = nu
     profile: {
       firstName,
       username,
+      language: normalizeLanguage(language),
       appearance: createAppearance(firstName),
       cosmetics: { neon: 'cyan', floor: 'steel', heroSkin: 'standard' },
       referralCode: createReferralCode(telegramId),
@@ -242,12 +183,23 @@ function seasonId(value) {
   return `S${String(index + 1).padStart(2, '0')}`;
 }
 
+/* Roles and the non-player crew names are copy, so they are resolved per
+   language when the public state is built rather than frozen into the save. */
 function createCrew() {
   return {
-    operator: { id: 'operator', role: 'Field Intelligence Lead', name: 'Operator', recruited: true, level: 1, status: 'ready' },
-    engineer: { id: 'engineer', role: 'Station Engineer', name: 'Mara Voss', recruited: false, level: 1, status: 'locked' },
-    analyst: { id: 'analyst', role: 'Signal Analyst', name: 'Signal Analyst', recruited: false, level: 1, status: 'locked' }
+    operator: { id: 'operator', name: 'Operator', recruited: true, level: 1, status: 'ready' },
+    engineer: { id: 'engineer', recruited: false, level: 1, status: 'locked' },
+    analyst: { id: 'analyst', recruited: false, level: 1, status: 'locked' }
   };
+}
+
+function crewView(player, lang) {
+  const copy = copyFor(lang).crew;
+  return Object.fromEntries(Object.entries(player.crew).map(([id, member]) => [id, {
+    ...member,
+    role: copy[id]?.role || '',
+    name: id === 'operator' ? member.name : copy[id]?.fallbackName || member.name || ''
+  }]));
 }
 
 function createRooms() {
@@ -267,6 +219,7 @@ export function ensurePlayerShape(player, now = new Date()) {
   const timestamp = new Date(now);
   player.schemaVersion = SCHEMA_VERSION;
   player.profile ||= { firstName: 'Operator', username: null };
+  player.profile.language = normalizeLanguage(player.profile.language);
   player.profile.appearance ||= createAppearance(player.profile.firstName);
   if (/\?{3,}|�|(?:Р.|Ð.){3,}/.test(String(player.profile.appearance.callSign || ''))) {
     player.profile.appearance.callSign = 'Operator';
@@ -394,6 +347,14 @@ export function updateAppearance(player, appearance = {}) {
   return normalized;
 }
 
+export function updateLanguage(player, language) {
+  ensurePlayerShape(player);
+  const normalized = String(language || '').trim().toLowerCase();
+  if (!LANGUAGES.includes(normalized)) throw gameError('INVALID_LANGUAGE', 'Unsupported interface language.');
+  player.profile.language = normalized;
+  return normalized;
+}
+
 export function updateCosmetics(player, cosmetics = {}) {
   ensurePlayerShape(player);
   const allowed = {
@@ -476,12 +437,12 @@ export function startIncident(player, now = new Date()) {
   const types = Object.keys(INCIDENT_DEFS);
   const type = types[incidents.completed % types.length];
   const definition = INCIDENT_DEFS[type];
+  // Only ids and numbers are persisted; the prose is attached per language when
+  // the public state is built, so switching language relabels a live incident.
   incidents.active = {
     id: `incident_${incidents.completed + 1}_${asMs(now)}`,
     type,
-    title: definition.title,
-    description: definition.description,
-    options: Object.entries(definition.outcomes).map(([id, option]) => ({ id, label: option.label, energy: option.energy, reward: option.reward })),
+    options: Object.entries(definition.outcomes).map(([id, option]) => ({ id, energy: option.energy, reward: option.reward })),
     startedAt: new Date(now),
     status: 'active'
   };
@@ -498,6 +459,7 @@ export function resolveIncident(player, action, now = new Date()) {
   if (player.resources.energy < outcome.energy) {
     throw gameError('NOT_ENOUGH_ENERGY', `Requires ${outcome.energy} Power.`);
   }
+  const c = copyFor(playerLanguage(player));
   player.resources.energy -= outcome.energy;
   applyReward(player, outcome.reward);
   updateHeroLevel(player);
@@ -507,7 +469,7 @@ export function resolveIncident(player, action, now = new Date()) {
     action,
     cost: { energy: outcome.energy },
     reward: outcome.reward,
-    message: outcome.message,
+    message: c.incidents[incidents.active.type].outcomes[action].message,
     resolvedAt: new Date(now)
   };
   incidents.active = null;
@@ -516,7 +478,7 @@ export function resolveIncident(player, action, now = new Date()) {
   incidents.lastCompleted = result;
   player.progression.lastCompleted = {
     id: result.id,
-    title: 'Security incident contained',
+    title: c.misc.incidentContained,
     reward: result.reward,
     at: new Date(now)
   };
@@ -572,7 +534,7 @@ export function migratePlayerV2(player, now = new Date()) {
     cooldowns: { terminal: timestamp, generator: timestamp },
     incidents: { active: null, completed: 0, nextAt: timestamp, lastCompleted: null },
     returnReport: null,
-    lastCompleted: { id: 'migration_v3', title: 'Station systems updated', at: timestamp }
+    lastCompleted: { id: 'migration_v3', title: copyFor(playerLanguage(player)).misc.stationUpdated, at: timestamp }
   };
   player.stats = {
     completedJobs: Number(player.stats?.completedBuilds || 0),
@@ -698,7 +660,7 @@ function checkAchievements(player, now = new Date()) {
     if (!complete || earned.includes(id)) continue;
     earned.push(id);
     player.resources.components += ACHIEVEMENT_DEFS[id].components;
-    player.progression.achievements.newAchievement = { id, ...ACHIEVEMENT_DEFS[id], earnedAt: new Date(now) };
+    player.progression.achievements.newAchievement = { id, components: ACHIEVEMENT_DEFS[id].components, earnedAt: new Date(now) };
   }
 }
 
@@ -729,7 +691,7 @@ function completeJob(player, now, slot = 'primary') {
   player.stats.completedJobs += 1;
   player.progression.lastCompleted = {
     id: job.id,
-    title: job.completeTitle || 'Operation complete',
+    title: job.completeTitle || copyFor(playerLanguage(player)).misc.operationComplete,
     reward: job.reward || {},
     at: new Date(now)
   };
@@ -758,29 +720,34 @@ function grantItem(player, itemId) {
 
 export function roomAccess(player, roomId) {
   const room = player.rooms?.[roomId];
-  if (!room) return { unlocked: false, reason: 'Unknown room.' };
-  if (room.level > 0 || room.construction) return { unlocked: true, reason: null };
-  if (roomId === 'lab') return { unlocked: true, reason: null };
+  if (!room) return { unlocked: false, reasonKey: 'unknown_room' };
+  if (room.level > 0 || room.construction) return { unlocked: true, reasonKey: null };
+  if (roomId === 'lab') return { unlocked: true, reasonKey: null };
   if (roomId === 'power' && !player.progression.onboarding.completed && player.progression.onboarding.step < 4) {
-    return { unlocked: false, reason: 'Restore the Command Lab systems first.' };
+    return { unlocked: false, reasonKey: 'restore_lab' };
   }
   if (roomId === 'power' && !player.progression.onboarding.completed && player.progression.onboarding.step >= 4) {
-    return { unlocked: true, reason: null };
+    return { unlocked: true, reasonKey: null };
   }
   const level = id => Number(player.rooms?.[id]?.level || 0);
   const levelThreeRooms = ROOM_ORDER.filter(id => level(id) >= 3).length;
   const rules = {
-    power: [level('lab') >= 2, 'Requires Command Lab level 2.'],
-    workshop: [level('lab') >= 3, 'Requires Command Lab level 3.'],
-    comms: [levelThreeRooms >= 2, 'Requires any two rooms at level 3.'],
-    automation: [level('workshop') >= 3, 'Requires Workshop & Storage level 3.'],
-    antenna: [level('comms') >= 2, 'Requires Communications Hub level 2.'],
-    analysis: [level('antenna') >= 3, 'Requires Signal Array level 3.'],
-    interceptor: [level('analysis') >= 4, 'Requires Risk Analysis Center level 4.']
+    power: [level('lab') >= 2, 'lab_2'],
+    workshop: [level('lab') >= 3, 'lab_3'],
+    comms: [levelThreeRooms >= 2, 'two_level_three'],
+    automation: [level('workshop') >= 3, 'workshop_3'],
+    antenna: [level('comms') >= 2, 'comms_2'],
+    analysis: [level('antenna') >= 3, 'antenna_3'],
+    interceptor: [level('analysis') >= 4, 'analysis_4']
   };
   const rule = rules[roomId];
-  if (rule && !rule[0]) return { unlocked: false, reason: rule[1] };
-  return { unlocked: true, reason: null };
+  if (rule && !rule[0]) return { unlocked: false, reasonKey: rule[1] };
+  return { unlocked: true, reasonKey: null };
+}
+
+/** Lock text for a given language; null when the room is open. */
+function lockText(reasonKey, lang) {
+  return reasonKey ? copyFor(lang).lock[reasonKey] || null : null;
 }
 
 export function roomCost(player, roomId, targetLevel = null) {
@@ -811,7 +778,7 @@ export function startConstruction(player, roomId, now = new Date(), timeScale = 
   if (!room) throw gameError('UNKNOWN_ROOM', 'Unknown room.');
   if (room.construction) throw gameError('ROOM_BUSY', 'That room is already under construction.');
   const access = roomAccess(player, roomId);
-  if (!access.unlocked) throw gameError('LOCKED_ROOM', access.reason);
+  if (!access.unlocked) throw gameError('LOCKED_ROOM', lockText(access.reasonKey, DEFAULT_LANGUAGE));
   const cost = roomCost(player, roomId);
   if (!cost) throw gameError('MAX_LEVEL', 'This room has reached its maximum level.');
   if (player.resources.data < cost.data) throw gameError('NOT_ENOUGH_DATA', `Requires ${Math.ceil(cost.data - player.resources.data)} more Intel.`);
@@ -834,7 +801,9 @@ export function startConstruction(player, roomId, now = new Date(), timeScale = 
     type: 'construction', roomId, targetLevel: cost.level,
     startedAt: new Date(now), endsAt: new Date(asMs(now) + durationMs), durationMs,
     reward: { xp: cost.level === 1 ? 35 : 20 },
-    completeTitle: cost.level === 1 ? `${ROOM_DEFS[roomId].name}: floor opened` : `${ROOM_DEFS[roomId].name}: upgrade complete`
+    completeTitle: (build => cost.level === 1
+      ? build.floorOpened(roomName(roomId, playerLanguage(player)))
+      : build.upgradeComplete(roomName(roomId, playerLanguage(player))))(copyFor(playerLanguage(player)).build)
   };
   if (roomId === 'power' && player.progression.onboarding.step === 4) job.onboardingStep = 4;
   room.construction = { targetLevel: cost.level, startedAt: job.startedAt, endsAt: job.endsAt, durationMs };
@@ -851,8 +820,9 @@ export function startObjectAction(player, actionId, now = new Date(), timeScale 
   ensurePlayerShape(player, now);
   requireIdleHero(player);
   const spec = actionSpec(player, actionId, now);
+  const lang = playerLanguage(player);
   if (!spec) throw gameError('UNKNOWN_ACTION', 'That operation is not available.');
-  if (!spec.enabled) throw gameError('ACTION_LOCKED', spec.reason || 'That operation is not available yet.');
+  if (!spec.enabled) throw gameError('ACTION_LOCKED', actionCopy(actionId, spec, DEFAULT_LANGUAGE).reason || 'That operation is not available yet.');
   if (player.resources.energy < (spec.energy || 0)) throw gameError('NOT_ENOUGH_ENERGY', `Requires ${spec.energy} Power.`);
   const path = findPath(player, spec.node);
   if (!path) throw gameError('UNREACHABLE_OBJECT', 'The operator cannot reach this object.');
@@ -862,7 +832,7 @@ export function startObjectAction(player, actionId, now = new Date(), timeScale 
   const job = {
     id: `${actionId}_${asMs(now)}`, actionId, type: 'action', target: spec.objectId,
     startedAt: new Date(now), endsAt: new Date(asMs(now) + durationMs), durationMs,
-    reward: { ...spec.reward }, completeTitle: spec.completeTitle,
+    reward: { ...spec.reward }, completeTitle: actionCopy(actionId, spec, lang).complete,
     onboardingStep: spec.onboardingStep
   };
   if (actionId === 'daily_supply') {
@@ -884,39 +854,49 @@ function actionSpec(player, actionId, now) {
   const specs = {
     emergency_lights: {
       objectId: 'generator', node: 'lab_generator', state: 'repairing', durationMs: 3_000, energy: 0,
-      reward: { xp: 10 }, completeTitle: 'Emergency lighting restored', onboardingStep: 0,
-      enabled: step === 0, reason: 'The lighting is already online.'
+      reward: { xp: 10 }, onboardingStep: 0, enabled: step === 0
     },
     boot_terminal: {
       objectId: 'terminal', node: 'lab_terminal', state: 'working', durationMs: 5_000, energy: 2,
-      reward: { data: 60, xp: 10 }, completeTitle: 'Command Terminal online', onboardingStep: 1,
-      enabled: step === 1, reason: 'Restore the emergency lighting first.'
+      reward: { data: 60, xp: 10 }, onboardingStep: 1, enabled: step === 1
     },
     repair_power: {
       objectId: 'generator', node: 'lab_generator', state: 'repairing', durationMs: 8_000, energy: 4,
-      reward: { data: 30, components: 1, xp: 15 }, completeTitle: 'Power Control repaired', onboardingStep: 3,
-      enabled: step === 3, reason: 'Complete the first signal assessment first.'
+      reward: { data: 30, components: 1, xp: 15 }, onboardingStep: 3, enabled: step === 3
     },
     daily_supply: {
       objectId: 'supply', node: 'lab_supply', state: 'collecting', durationMs: 2_500, energy: 0,
-      reward: { components: supplyReward(player, now), xp: 5 }, completeTitle: 'Shipment collected',
-      enabled: supplyReady(player, now), reason: 'The next shipment is still inbound.'
+      reward: { components: supplyReward(player, now), xp: 5 }, enabled: supplyReady(player, now)
     },
     terminal_sync: {
       objectId: 'terminal', node: 'lab_terminal', state: 'working', durationMs: 30_000, energy: 6,
-      reward: { data: 45, xp: 8 }, completeTitle: 'Intelligence batch processed',
-      enabled: player.progression.onboarding.completed && asMs(now) >= asMs(player.progression.cooldowns.terminal),
-      reason: 'The terminal is already synchronizing or was refreshed recently.'
+      reward: { data: 45, xp: 8 },
+      enabled: player.progression.onboarding.completed && asMs(now) >= asMs(player.progression.cooldowns.terminal)
     },
     generator_charge: {
       objectId: 'generator', node: 'lab_generator', state: 'repairing', durationMs: 15_000, energy: 0,
-      reward: { energy: 25, xp: 5 }, completeTitle: 'Power reserve restored',
+      reward: { energy: 25, xp: 5 },
       enabled: player.progression.onboarding.completed && asMs(now) >= asMs(player.progression.cooldowns.generator)
         && player.resources.energy < energyMax(player) - 5,
-      reason: player.resources.energy >= energyMax(player) - 5 ? 'The Power reserve is almost full.' : 'Power Control was serviced recently.'
+      // Two different blockers share one action, so the spec carries the
+      // discriminator and content.js carries both sentences.
+      reasonFull: player.resources.energy >= energyMax(player) - 5
     }
   };
-  return specs[actionId] || null;
+  const spec = specs[actionId];
+  if (!spec) return null;
+  return { ...spec, id: actionId };
+}
+
+/** Localized label, blurb, completion title and blocked-reason for an action. */
+function actionCopy(actionId, spec, lang) {
+  const copy = copyFor(lang).actions[actionId];
+  return {
+    label: copy.label,
+    description: copy.description,
+    complete: copy.complete,
+    reason: spec?.reasonFull ? copy.reasonFull : copy.reason
+  };
 }
 
 export function calculateSignalRisk(signal) {
@@ -961,9 +941,8 @@ export function resolveSignal(player, signalId, decision, now = new Date()) {
     player.resources.components += 5;
     reward.dailyComponents = 5;
   }
-  const explanation = safe
-    ? `Risk ${risk}/100: deep liquidity and moderate holder concentration make this signal safe to research.`
-    : `Risk ${risk}/100: thin liquidity, holder concentration or a mutable contract call for caution.`;
+  const signalCopy = copyFor(playerLanguage(player)).signal;
+  const explanation = safe ? signalCopy.safe(risk) : signalCopy.risky(risk);
   const result = { signalId, decision, correct, safe, risk, reward, rareFind: Boolean(rareComponent), explanation, resolvedAt: new Date(now) };
   player.progression.recon.lastResult = result;
   player.progression.recon.signals = player.progression.recon.signals.filter(item => item.id !== signalId);
@@ -975,7 +954,7 @@ export function resolveSignal(player, signalId, decision, now = new Date()) {
   if (player.progression.recon.signals.length === 0) {
     player.progression.recon.nextAt = new Date(asMs(now) + RECON_INTERVAL_MS);
   }
-  player.progression.lastCompleted = { id: `signal_${signalId}`, title: correct ? 'Assessment confirmed' : 'Assessment reviewed', reward, at: new Date(now) };
+  player.progression.lastCompleted = { id: `signal_${signalId}`, title: correct ? signalCopy.confirmed : signalCopy.reviewed, reward, at: new Date(now) };
   checkAchievements(player, now);
   return result;
 }
@@ -1029,6 +1008,7 @@ export function resolveExternalSignal(player, signalId, decision, external, now 
   if (!signal) throw gameError('UNKNOWN_SIGNAL', 'This signal is no longer available.');
   if (!external || typeof external.correct !== 'boolean') throw gameError('INVALID_WAVE_RESULT', 'XRadar did not confirm the outcome.', 502);
   const correct = external.correct;
+  const liveCopy = copyFor(playerLanguage(player)).signal;
   const reward = correct ? { data: 100, components: 2, xp: 22 } : { data: 20, components: 0, xp: 8 };
   applyReward(player, reward);
   updateHeroLevel(player);
@@ -1056,14 +1036,14 @@ export function resolveExternalSignal(player, signalId, decision, external, now 
     source: 'xradar',
     actualPct: Number(external.actualPct || 0),
     symbol: String(external.symbol || 'REVEALED'),
-    explanation: correct ? 'Your assessment matched the verified live-market outcome.' : 'The verified market outcome differed from your assessment.',
+    explanation: correct ? liveCopy.liveMatch : liveCopy.liveDiffer,
     resolvedAt: new Date(now)
   };
   player.progression.recon.lastResult = result;
   player.progression.recon.signals = player.progression.recon.signals.filter(item => item.id !== signalId);
   player.progression.recon.round += 1;
   if (!player.progression.recon.signals.length) player.progression.recon.nextAt = new Date(asMs(now) + RECON_INTERVAL_MS);
-  player.progression.lastCompleted = { id: `live_signal_${signalId}`, title: 'Live signal verified', reward, at: new Date(now) };
+  player.progression.lastCompleted = { id: `live_signal_${signalId}`, title: liveCopy.liveVerified, reward, at: new Date(now) };
   return result;
 }
 
@@ -1271,6 +1251,8 @@ export function acknowledgeReturn(player) {
 
 export function publicGameState(player, now = new Date()) {
   ensurePlayerShape(player, now);
+  const lang = playerLanguage(player);
+  const c = copyFor(lang);
   const roomStates = Object.fromEntries(ROOM_ORDER.map(id => {
     const room = player.rooms[id];
     const access = roomAccess(player, id);
@@ -1280,25 +1262,23 @@ export function publicGameState(player, now = new Date()) {
       remainingMs: Math.max(0, asMs(room.construction.endsAt) - asMs(now)),
       progress: clamp((asMs(now) - asMs(room.construction.startedAt)) / Math.max(1, room.construction.durationMs), 0, 1)
     } : null;
-    return [id, { ...room, construction, ...ROOM_DEFS[id], unlocked: access.unlocked, lockReason: access.reason, nextUpgrade: next, maxLevel: 10 }];
+    return [id, {
+      ...room, construction, ...ROOM_DEFS[id], ...c.rooms[id],
+      unlocked: access.unlocked, lockReason: lockText(access.reasonKey, lang),
+      nextUpgrade: next, maxLevel: 10
+    }];
   }));
   const heroPoint = NAV_POINTS[player.hero.node] || NAV_POINTS.lab_center;
-  const job = player.hero.job ? {
-    ...player.hero.job,
-    remainingMs: Math.max(0, asMs(player.hero.job.endsAt) - asMs(now))
-  } : null;
-  const secondaryJob = player.progression.secondaryJob ? {
-    ...player.progression.secondaryJob,
-    remainingMs: Math.max(0, asMs(player.progression.secondaryJob.endsAt) - asMs(now))
-  } : null;
-  const tasks = buildTasks(player, now);
+  const job = jobView(player.hero.job, now, lang);
+  const secondaryJob = jobView(player.progression.secondaryJob, now, lang);
+  const tasks = buildTasks(player, now, lang);
   const recentHistory = player.stats.reconHistory.filter(entry => asMs(entry.at) >= asMs(now) - 30 * DAY_MS);
   const recentCorrect = recentHistory.filter(entry => entry.correct).length;
   const accuracy30 = recentHistory.length ? Math.round(recentCorrect / recentHistory.length * 100) : 0;
   const conversionTriggers = [
-    (player.rooms.automation?.level || 0) >= 5 ? { id: 'automation', title: 'Your automation system is ready for a live market.', target: 'terminal' } : null,
-    (player.rooms.analysis?.level || 0) >= 6 ? { id: 'analysis', title: 'Run the same safety checks on live tokens.', target: 'terminal' } : null,
-    recentHistory.length >= 5 && accuracy30 >= 60 ? { id: 'accuracy', title: `Your 30-day accuracy is ${accuracy30}%. Test it on live signals.`, target: 'terminal' } : null
+    (player.rooms.automation?.level || 0) >= 5 ? { id: 'automation', title: c.conversion.automation, target: 'terminal' } : null,
+    (player.rooms.analysis?.level || 0) >= 6 ? { id: 'analysis', title: c.conversion.analysis, target: 'terminal' } : null,
+    recentHistory.length >= 5 && accuracy30 >= 60 ? { id: 'accuracy', title: c.conversion.accuracy(accuracy30), target: 'terminal' } : null
   ].filter(Boolean);
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -1307,6 +1287,7 @@ export function publicGameState(player, now = new Date()) {
       firstName: player.profile.firstName,
       username: player.profile.username,
       appearance: player.profile.appearance,
+      language: lang,
       cosmetics: player.profile.cosmetics,
       referralCode: player.profile.referralCode,
       referralConnected: Boolean(player.profile.referredBy),
@@ -1334,10 +1315,10 @@ export function publicGameState(player, now = new Date()) {
         analysisLevel: player.rooms.analysis?.level || equippedBonus(player, 'analysis')
       }
     },
-    crew: player.crew,
+    crew: crewView(player, lang),
     rooms: roomStates,
     roomOrder: ROOM_ORDER,
-    objects: buildObjects(player, now),
+    objects: buildObjects(player, now, lang),
     tasks,
     recommendedTask: tasks[0] || null,
     progression: {
@@ -1360,10 +1341,11 @@ export function publicGameState(player, now = new Date()) {
       inventory: {
         owned: player.progression.inventory.owned,
         newItem: player.progression.inventory.newItem,
-        items: ITEM_DEFS
+        items: Object.fromEntries(Object.entries(ITEM_DEFS).map(([id, item]) => [id, { ...item, ...c.items[id] }]))
       },
       incidents: {
         ...player.progression.incidents,
+        active: incidentView(player.progression.incidents.active, lang),
         ready: player.progression.onboarding.completed
           && !player.progression.incidents.active
           && asMs(now) >= asMs(player.progression.incidents.nextAt),
@@ -1371,7 +1353,7 @@ export function publicGameState(player, now = new Date()) {
       },
       achievements: {
         ...player.progression.achievements,
-        definitions: ACHIEVEMENT_DEFS
+        definitions: Object.fromEntries(Object.entries(ACHIEVEMENT_DEFS).map(([id, def]) => [id, { ...def, ...c.achievements[id] }]))
       },
       daily: player.progression.daily,
       season: {
@@ -1395,82 +1377,104 @@ export function publicGameState(player, now = new Date()) {
   };
 }
 
-function buildObjects(player, now) {
+/**
+ * A running job with its countdown and a present-tense label.
+ *
+ * The label is derived here rather than stored on the job: `completeTitle` is
+ * frozen at the language in force when the job started, and a player who
+ * switches language mid-build should still read the strip in the new one.
+ */
+function jobView(job, now, lang) {
+  if (!job) return null;
+  const c = copyFor(lang);
+  const label = job.type === 'construction'
+    ? (job.targetLevel === 1 ? c.build.opening : c.build.upgrading)(c.rooms[job.roomId]?.name || job.roomId)
+    : c.actions[job.actionId]?.label || c.misc.operationComplete;
+  return { ...job, label, remainingMs: Math.max(0, asMs(job.endsAt) - asMs(now)) };
+}
+
+/** Live incident with its prose attached in the requested language. */
+function incidentView(active, lang) {
+  if (!active) return null;
+  const copy = copyFor(lang).incidents[active.type];
+  if (!copy) return active;
+  return {
+    ...active,
+    title: copy.title,
+    description: copy.description,
+    options: (active.options || []).map(option => ({ ...option, label: copy.outcomes[option.id]?.label || option.id }))
+  };
+}
+
+function buildObjects(player, now, lang) {
+  const o = copyFor(lang).objects;
   const step = player.progression.onboarding.step;
-  const terminalAction = step === 1 ? actionView(player, 'boot_terminal', now)
-    : player.progression.onboarding.completed ? actionView(player, 'terminal_sync', now) : null;
-  const generatorAction = step === 0 ? actionView(player, 'emergency_lights', now)
-    : step === 3 ? actionView(player, 'repair_power', now)
-      : player.progression.onboarding.completed ? actionView(player, 'generator_charge', now) : null;
+  const terminalAction = step === 1 ? actionView(player, 'boot_terminal', now, lang)
+    : player.progression.onboarding.completed ? actionView(player, 'terminal_sync', now, lang) : null;
+  const generatorAction = step === 0 ? actionView(player, 'emergency_lights', now, lang)
+    : step === 3 ? actionView(player, 'repair_power', now, lang)
+      : player.progression.onboarding.completed ? actionView(player, 'generator_charge', now, lang) : null;
   const nextRoom = ROOM_ORDER.find(id => player.rooms[id].level === 0 && roomAccess(player, id).unlocked);
-  const elevatorAction = step === 4 ? buildActionView(player, 'power')
-    : player.progression.onboarding.completed && nextRoom ? buildActionView(player, nextRoom) : null;
+  const elevatorAction = step === 4 ? buildActionView(player, 'power', lang)
+    : player.progression.onboarding.completed && nextRoom ? buildActionView(player, nextRoom, lang) : null;
+  const owned = player.progression.inventory.owned.length;
+  const reconOpen = step === 2 || (player.rooms.antenna?.level || 0) > 0;
   return [
-    { id: 'terminal', name: 'Command Terminal', roomId: 'lab', node: 'lab_terminal', status: step < 2 ? 'Awaiting startup' : 'System online', action: terminalAction },
-    { id: 'analyzer', name: 'Signal Radar', roomId: 'lab', node: 'lab_analyzer', status: step === 2 ? 'First signal ready' : 'Screening risk factors', action: step === 2 || (player.rooms.antenna?.level || 0) > 0 ? { type: 'navigate', target: 'map', label: 'Open intercepted signals', description: 'Review the signals the station has intercepted.' } : null },
-    { id: 'generator', name: 'Power Control', roomId: 'lab', node: 'lab_generator', status: player.rooms.power.level ? 'Linked to the Power Room' : step < 4 ? 'Running on emergency mode' : 'Ready for expansion', action: generatorAction },
-    { id: 'locker', name: 'Equipment Locker', roomId: 'lab', node: 'lab_locker', status: `${player.progression.inventory.owned.length} item${player.progression.inventory.owned.length === 1 ? '' : 's'} stored`, action: { type: 'navigate', target: 'inventory', label: 'Open equipment storage', description: 'Inspect and equip recovered items.' } },
-    { id: 'supply', name: 'Surface Supply Access', roomId: 'lab', node: 'lab_supply', status: supplyReady(player, now) ? 'Shipment waiting' : 'Shipment collected', action: supplyReady(player, now) ? actionView(player, 'daily_supply', now) : null },
-    { id: 'elevator', name: 'Expansion Elevator', roomId: 'lab', node: 'lab_elevator', status: nextRoom ? `Next floor: ${ROOM_DEFS[nextRoom].name}` : 'All available floors are open', action: elevatorAction }
+    { id: 'terminal', name: o.terminal.name, description: o.terminal.description, roomId: 'lab', node: 'lab_terminal', status: step < 2 ? o.terminal.awaiting : o.terminal.online, action: terminalAction },
+    { id: 'analyzer', name: o.analyzer.name, description: o.analyzer.description, roomId: 'lab', node: 'lab_analyzer', status: step === 2 ? o.analyzer.ready : o.analyzer.screening, action: reconOpen ? { type: 'navigate', target: 'map', label: o.analyzer.navLabel, description: o.analyzer.navDescription } : null },
+    { id: 'generator', name: o.generator.name, description: o.generator.description, roomId: 'lab', node: 'lab_generator', status: player.rooms.power.level ? o.generator.linked : step < 4 ? o.generator.emergency : o.generator.expandable, action: generatorAction },
+    { id: 'locker', name: o.locker.name, description: o.locker.description, roomId: 'lab', node: 'lab_locker', status: o.locker.stored(owned), action: { type: 'navigate', target: 'inventory', label: o.locker.navLabel, description: o.locker.navDescription } },
+    { id: 'supply', name: o.supply.name, description: o.supply.description, roomId: 'lab', node: 'lab_supply', status: supplyReady(player, now) ? o.supply.waiting : o.supply.collected, action: supplyReady(player, now) ? actionView(player, 'daily_supply', now, lang) : null },
+    { id: 'elevator', name: o.elevator.name, description: o.elevator.description, roomId: 'lab', node: 'lab_elevator', status: nextRoom ? o.elevator.nextFloor(roomName(nextRoom, lang)) : o.elevator.allOpen, action: elevatorAction }
   ];
 }
 
-function actionView(player, actionId, now) {
+function actionView(player, actionId, now, lang) {
   const spec = actionSpec(player, actionId, now);
   if (!spec) return null;
+  const copy = actionCopy(actionId, spec, lang);
   return {
-    type: 'action', id: actionId, label: actionLabels[actionId],
-    description: actionDescriptions[actionId], enabled: spec.enabled,
-    reason: spec.enabled ? null : spec.reason,
+    type: 'action', id: actionId, label: copy.label,
+    description: copy.description, enabled: spec.enabled,
+    reason: spec.enabled ? null : copy.reason,
     cost: { energy: spec.energy || 0 }, reward: spec.reward, durationMs: spec.durationMs
   };
 }
 
-function buildActionView(player, roomId) {
+function buildActionView(player, roomId, lang) {
   const cost = roomCost(player, roomId);
+  const c = copyFor(lang);
   return {
     type: 'build', roomId,
-    label: player.rooms[roomId].level ? 'Upgrade room' : 'Open new floor',
-    description: `${ROOM_DEFS[roomId].name}: ${ROOM_DEFS[roomId].effect}`,
+    label: player.rooms[roomId].level ? c.build.upgrade : c.build.open,
+    description: `${c.rooms[roomId].name}: ${c.rooms[roomId].effect}`,
     enabled: Boolean(cost), cost: cost ? { data: cost.data, components: cost.components, energy: cost.energy } : {},
     durationMs: cost?.durationMs || 0
   };
 }
 
-const actionLabels = {
-  emergency_lights: 'Restore emergency lights', boot_terminal: 'Boot the terminal', repair_power: 'Stabilize the grid',
-  daily_supply: 'Collect shipment', terminal_sync: 'Synchronize Intel', generator_charge: 'Recharge reserve'
-};
-
-const actionDescriptions = {
-  emergency_lights: 'Bring the Command Lab back online.',
-  boot_terminal: 'Start the intelligence workstation and load the first signal.',
-  repair_power: 'Repair the damaged Power Control system.',
-  daily_supply: 'Recover the waiting Parts shipment.',
-  terminal_sync: 'Process a fresh station intelligence batch.',
-  generator_charge: 'Restore part of the station Power reserve.'
-};
-
-function buildTasks(player, now) {
+function buildTasks(player, now, lang) {
+  const c = copyFor(lang);
+  const t = c.tasks;
   if (player.hero.job) {
-    return [{ id: 'active_job', kind: 'active', title: 'Operation in progress', description: 'The assigned operator is completing the current task.', target: 'bunker', progress: 0, reward: player.hero.job.reward }];
+    return [{ id: 'active_job', kind: 'active', ...t.active_job, target: 'bunker', progress: 0, reward: player.hero.job.reward }];
   }
   const step = player.progression.onboarding.step;
   const onboarding = [
-    { id: 'lights', title: 'Restore the lights', description: 'Activate emergency lighting at Power Control.', target: 'generator', reward: { xp: 10 } },
-    { id: 'terminal', title: 'Bring the terminal online', description: 'Boot the Command Terminal.', target: 'terminal', reward: { data: 60, xp: 10 } },
-    { id: 'first_signal', title: 'Assess the first signal', description: 'Inspect the evidence and submit a conclusion.', target: 'map', reward: { data: 80, components: 1 } },
-    { id: 'repair', title: 'Stabilize station power', description: 'Repair Power Control.', target: 'generator', reward: { data: 30, components: 1 } },
-    { id: 'power_floor', title: 'Open the Power Room', description: 'Use the elevator to expand the Lab.', target: 'elevator', reward: { xp: 35 } }
+    { id: 'lights', ...t.lights, target: 'generator', reward: { xp: 10 } },
+    { id: 'terminal', ...t.terminal, target: 'terminal', reward: { data: 60, xp: 10 } },
+    { id: 'first_signal', ...t.first_signal, target: 'map', reward: { data: 80, components: 1 } },
+    { id: 'repair', ...t.repair, target: 'generator', reward: { data: 30, components: 1 } },
+    { id: 'power_floor', ...t.power_floor, target: 'elevator', reward: { xp: 35 } }
   ];
   if (!player.progression.onboarding.completed) return [onboarding[step]];
   const tasks = [];
   const nextRoom = ROOM_ORDER.find(id => player.rooms[id].level === 0 && roomAccess(player, id).unlocked);
-  if (nextRoom) tasks.push({ id: `build_${nextRoom}`, kind: 'story', title: `Build: ${ROOM_DEFS[nextRoom].name}`, description: ROOM_DEFS[nextRoom].short, target: 'elevator', reward: { xp: 35 } });
-  if (supplyReady(player, now)) tasks.push({ id: 'supply', kind: 'daily', title: 'Collect the supply drop', description: 'Recover Parts from the surface access.', target: 'supply', reward: { components: 3 } });
+  if (nextRoom) tasks.push({ id: `build_${nextRoom}`, kind: 'story', title: t.build(c.rooms[nextRoom].name), description: c.rooms[nextRoom].short, target: 'elevator', reward: { xp: 35 } });
+  if (supplyReady(player, now)) tasks.push({ id: 'supply', kind: 'daily', ...t.supply, target: 'supply', reward: { components: 3 } });
   const recon = player.progression.recon;
-  if ((player.rooms.antenna?.level || 0) > 0 && recon.signals.length) tasks.push({ id: 'recon', kind: 'recon', title: 'Assess a market signal', description: 'Review the intercepted evidence.', target: 'map', reward: { data: 80, components: 1 } });
-  if (tasks.length < 3) tasks.push({ id: 'terminal_sync', kind: 'bunker', title: 'Synchronize intelligence', description: 'Process a fresh batch at the terminal.', target: 'terminal', reward: { data: 45 } });
+  if ((player.rooms.antenna?.level || 0) > 0 && recon.signals.length) tasks.push({ id: 'recon', kind: 'recon', ...t.recon, target: 'map', reward: { data: 80, components: 1 } });
+  if (tasks.length < 3) tasks.push({ id: 'terminal_sync', kind: 'bunker', ...t.terminal_sync, target: 'terminal', reward: { data: 45 } });
   return tasks.slice(0, 3);
 }
 

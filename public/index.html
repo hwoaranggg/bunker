@@ -78,37 +78,28 @@
     <main class="main">
       <section id="tab-lab" class="tab lab-tab active">
         <div class="scene">
-          <div id="sceneMedia" class="scene-media focus-lab">
-            <img id="labImage" class="lab-image" src="/assets/lab-background-v2.png" alt="Underground XRadar command laboratory">
-            <div id="stationMap" class="station-map" aria-label="XRadar station overview">
-              <img src="/assets/station-cutaway-v1.png" alt="Eight-room underground XRadar station">
-              <div id="roomMap" class="room-map"></div>
-            </div>
-            <div class="scanlines"></div><div class="radar-fx"></div>
-            <div class="sparks"><i></i><i></i><i></i><i></i></div><div class="elevator-light"></div>
+          <!-- Flat cutaway. Eight floors stacked, one shaft down the right.
+               Every box is drawn from the payload, so the station is never a
+               picture that disagrees with the save. -->
+          <div id="sceneMedia" class="scene-media">
+            <div class="shaft" aria-hidden="true"><i class="shaft-rail"></i><i id="elevatorCar" class="elevator-car"></i></div>
+            <div id="station" class="station"></div>
+            <div id="spots" class="spots" aria-label="Station objects"></div>
+            <div class="scanlines" aria-hidden="true"></div>
             <div id="operatorUnit" class="unit operator-unit idle" data-gender="custom" aria-label="XRadar operator">
               <i class="unit-shadow"></i><span class="unit-sprite"></span><span class="unit-equipment"><i class="eq-head"></i><i class="eq-body"></i><i class="eq-tool"></i></span><b id="operatorUnitLabel">Operator</b>
             </div>
             <div id="engineerUnit" class="unit engineer-unit hidden idle" aria-label="Station engineer"><i class="unit-shadow"></i><span class="unit-sprite"></span><b>Mara</b></div>
-            <div id="labHotspots" class="lab-hotspots">
-              <button class="hotspot hs-terminal" data-object="terminal" type="button" aria-label="Command terminal"><svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg></button>
-              <button class="hotspot hs-analyzer" data-object="analyzer" type="button" aria-label="Signal radar"><svg class="icon" aria-hidden="true"><use href="#i-radio"/></svg></button>
-              <button class="hotspot hs-generator" data-object="generator" type="button" aria-label="Power control"><svg class="icon" aria-hidden="true"><use href="#i-zap"/></svg></button>
-              <button class="hotspot hs-locker" data-object="locker" type="button" aria-label="Equipment locker"><svg class="icon" aria-hidden="true"><use href="#i-archive"/></svg></button>
-              <button class="hotspot hs-supply" data-object="supply" type="button" aria-label="Supply access"><svg class="icon" aria-hidden="true"><use href="#i-inbound"/></svg></button>
-              <button class="hotspot hs-elevator" data-object="elevator" type="button" aria-label="Station elevator"><svg class="icon" aria-hidden="true"><use href="#i-elevator"/></svg></button>
-            </div>
-          </div>
-          <div class="camera" aria-label="Station camera">
-            <button data-view="lab" class="active" type="button">Command Lab</button>
-            <button data-view="overview" type="button">All floors</button>
           </div>
           <button id="soundButton" class="scene-sound" type="button" aria-label="Toggle station ambience" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-sound-off"/></svg></button>
           <div class="scene-title"><b id="sceneTitle">Command Lab</b><span id="stationStatus">Command systems initializing</span></div>
-          <button id="goalButton" class="goal" type="button">
-            <svg class="icon" aria-hidden="true"><use href="#i-flag"/></svg>
-            <span><small>Current directive</small><b id="goalText">Restore the Lab</b></span>
-          </button>
+          <div class="goal">
+            <button id="goalButton" class="goal-main" type="button">
+              <svg class="icon" aria-hidden="true"><use href="#i-flag"/></svg>
+              <span><small id="goalLabel">Current directive</small><b id="goalText">Restore the Lab</b></span>
+            </button>
+            <button id="operationsButton" class="goal-more" type="button" aria-label="Open operations"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-target"/></svg></button>
+          </div>
           <div id="jobStrip" class="job hidden"><div class="job-top"><b id="jobTitle">Working</b><span id="jobTime" class="job-time">0:00</span></div><div class="progress"><i id="jobBar"></i></div><div id="secondaryJob" class="secondary-job hidden"></div></div>
           <button id="incidentButton" class="alert-orb" type="button" aria-label="Open station incident"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg></button>
           <div id="resourceFx" class="resource-fx" aria-hidden="true"></div>
@@ -136,6 +127,7 @@
             <button id="saveOperator" class="primary full" type="button">Save operator</button>
           </div>
           <div class="section-title">Station crew</div><div id="crewList" class="card"></div>
+          <div class="section-title">Settings</div><div id="settingsCard" class="card option-list"></div>
           <div class="section-title">Station appearance</div><div id="cosmeticList" class="card option-list"></div>
           <div class="section-title">Referral access</div><div id="referralCard" class="card"></div>
         </div>
@@ -146,33 +138,15 @@
         <div id="signalsBody" class="screen-body"></div>
       </section>
 
-      <section id="tab-missions" class="tab">
-        <div class="screen-head"><div class="eyebrow">Operations desk</div><h2>Missions</h2><p>Directives, achievements, daily accuracy and the current research season.</p></div>
-        <div class="screen-body">
-          <div class="section-title">Active directives</div><div id="missionList" class="card"></div>
-          <div class="section-title">Daily training</div><div id="dailyCard" class="card"></div>
-          <div class="section-title">Season</div><div id="seasonCard" class="card season amber"></div>
-          <div class="section-title">Accuracy leaderboard</div><div id="leaderboardList" class="card"><p>Leaderboard loads when this section opens.</p></div>
-          <div class="section-title">Achievements</div><div id="achievementList" class="card"></div>
-        </div>
-      </section>
-
-      <section id="tab-storage" class="tab">
-        <div class="screen-head"><div class="eyebrow">Equipment vault</div><h2>Storage</h2><p>Equipment is visible on the operator and changes a concrete station rule.</p></div>
-        <div class="screen-body">
-          <div class="section-title">Operator equipment</div><div id="storageList" class="card"></div>
-          <div class="section-title">Station support</div><div id="shopList" class="shop-list"></div>
-          <div id="conversionCard" class="card accent hidden"></div>
-        </div>
-      </section>
     </main>
 
+    <!-- Three destinations. Operations and Storage are not places you navigate
+         to — they are overlays over the station, reached from the thing they
+         describe: the directive plate and the equipment locker. -->
     <nav class="nav" id="nav">
-      <button class="active" data-tab="lab" data-index="0" type="button"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg><span class="label">Lab</span></button>
-      <button data-tab="crew" data-index="1" type="button"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg><span class="label">Crew</span></button>
-      <button data-tab="signals" data-index="2" type="button"><svg class="icon" aria-hidden="true"><use href="#i-radio"/></svg><span class="label">Signals</span></button>
-      <button data-tab="missions" data-index="3" type="button"><svg class="icon" aria-hidden="true"><use href="#i-target"/></svg><span class="label">Missions</span></button>
-      <button data-tab="storage" data-index="4" type="button"><svg class="icon" aria-hidden="true"><use href="#i-package"/></svg><span class="label">Storage</span></button>
+      <button class="active" data-tab="lab" type="button"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg><span class="label">Station</span></button>
+      <button data-tab="signals" type="button"><svg class="icon" aria-hidden="true"><use href="#i-radio"/></svg><span class="label">Signals</span></button>
+      <button data-tab="crew" type="button"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg><span class="label">Operator</span></button>
     </nav>
 
     <aside id="sheet" class="sheet" aria-live="polite">

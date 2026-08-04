@@ -93,6 +93,31 @@ export const ITEM_DEFS = Object.freeze({
   headlamp: { slot: 'head', bonus: { workSpeed: 0.05 } }
 });
 
+// The save keeps the historical room ids for backwards compatibility, while
+// the Signal Empire client presents them as technology modules.
+export const MODULE_DEFS = Object.freeze({
+  lab: { slug: 'radar_core', category: 'core' },
+  power: { slug: 'power_cell', category: 'power' },
+  workshop: { slug: 'chip_forge', category: 'hardware' },
+  comms: { slug: 'market_feed', category: 'network' },
+  automation: { slug: 'auto_scan', category: 'automation' },
+  antenna: { slug: 'whale_tracker', category: 'signals' },
+  analysis: { slug: 'risk_decoder', category: 'analysis' },
+  interceptor: { slug: 'alpha_interceptor', category: 'elite' }
+});
+
+export const LEAGUE_DEFS = Object.freeze([
+  { id: 'observer', min: 0 },
+  { id: 'scout', min: 250 },
+  { id: 'analyst', min: 900 },
+  { id: 'hunter', min: 2_500 },
+  { id: 'detective', min: 6_000 },
+  { id: 'operator', min: 14_000 },
+  { id: 'oracle', min: 30_000 }
+]);
+
+const DAILY_CIPHERS = Object.freeze(['ALPHA', 'WHALE', 'RADAR', 'BLOCK', 'CHAIN', 'PULSE', 'SCOUT']);
+
 export const NAV_POINTS = Object.freeze(createNavigationPoints());
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -141,7 +166,12 @@ export function createPlayer({ telegramId, firstName = 'Operator', username = nu
       inventory: { owned: ['field_coat'], newItem: null },
       achievements: { earned: [], newAchievement: null },
       daily: { day: dayKey(timestamp), attempts: 0, correct: 0, rewardClaimed: false },
-      season: { id: seasonId(timestamp), attempts: 0, correct: 0 },
+      season: { id: seasonId(timestamp), attempts: 0, correct: 0, signalPoints: 0 },
+      signalEmpire: {
+        scan: { day: dayKey(timestamp), taps: 0, pointsEarned: 0 },
+        combo: { day: dayKey(timestamp), claimed: false, attempts: 0 },
+        cipher: { day: dayKey(timestamp), claimed: false }
+      },
       commerce: { subscriptionUntil: null, entitlements: [], processedOrders: [] },
       secondaryJob: null,
       conversion: { shown: [], rewarded: [] },
@@ -278,7 +308,12 @@ export function ensurePlayerShape(player, now = new Date()) {
   player.progression.achievements.earned ||= [];
   player.progression.achievements.newAchievement ??= null;
   player.progression.daily ||= { day: dayKey(timestamp), attempts: 0, correct: 0, rewardClaimed: false };
-  player.progression.season ||= { id: seasonId(timestamp), attempts: 0, correct: 0 };
+  player.progression.season ||= { id: seasonId(timestamp), attempts: 0, correct: 0, signalPoints: 0 };
+  player.progression.season.signalPoints ??= 0;
+  player.progression.signalEmpire ||= {};
+  player.progression.signalEmpire.scan ||= { day: dayKey(timestamp), taps: 0, pointsEarned: 0 };
+  player.progression.signalEmpire.combo ||= { day: dayKey(timestamp), claimed: false, attempts: 0 };
+  player.progression.signalEmpire.cipher ||= { day: dayKey(timestamp), claimed: false };
   player.progression.commerce ||= { subscriptionUntil: null, entitlements: [], processedOrders: [] };
   player.progression.commerce.entitlements ||= [];
   player.progression.commerce.processedOrders ||= [];
@@ -643,9 +678,18 @@ function updateCalendarProgress(player, now) {
   if (player.progression.daily.day !== today) {
     player.progression.daily = { day: today, attempts: 0, correct: 0, rewardClaimed: false };
   }
+  if (player.progression.signalEmpire.scan.day !== today) {
+    player.progression.signalEmpire.scan = { day: today, taps: 0, pointsEarned: 0 };
+  }
+  if (player.progression.signalEmpire.combo.day !== today) {
+    player.progression.signalEmpire.combo = { day: today, claimed: false, attempts: 0 };
+  }
+  if (player.progression.signalEmpire.cipher.day !== today) {
+    player.progression.signalEmpire.cipher = { day: today, claimed: false };
+  }
   const currentSeason = seasonId(now);
   if (player.progression.season.id !== currentSeason) {
-    player.progression.season = { id: currentSeason, attempts: 0, correct: 0 };
+    player.progression.season = { id: currentSeason, attempts: 0, correct: 0, signalPoints: 0 };
   }
 }
 
@@ -681,6 +725,7 @@ function completeJob(player, now, slot = 'primary') {
     if (job.roomId === 'power') grantItem(player, 'headlamp');
     if (job.roomId === 'workshop') grantItem(player, 'utility_vest');
     if (job.roomId === 'antenna') grantItem(player, 'field_tablet');
+    grantSignalPoints(player, 5 + job.targetLevel * 2);
   }
   if (job.actionId === 'boot_terminal') player.rooms.lab.level = Math.max(2, player.rooms.lab.level);
   applyReward(player, job.reward || {});
@@ -710,6 +755,137 @@ function updateHeroLevel(player) {
   player.hero.level = Math.max(1, Math.floor(player.hero.xp / 100) + 1);
   if (player.hero.level >= 2) grantItem(player, 'insulated_gloves');
   if (player.hero.level >= 3) grantItem(player, 'analyst_goggles');
+}
+
+function grantSignalPoints(player, amount) {
+  const points = Math.max(0, Math.floor(Number(amount) || 0));
+  player.progression.season.signalPoints = Math.max(0, Number(player.progression.season.signalPoints || 0)) + points;
+  return points;
+}
+
+export function scanPower(player) {
+  return 2
+    + Math.max(1, Number(player.rooms?.lab?.level || 1))
+    + Math.floor(Number(player.rooms?.comms?.level || 0) / 2)
+    + Math.floor(Number(player.rooms?.automation?.level || 0) / 3);
+}
+
+export function performScan(player, requestedTaps = 1, now = new Date()) {
+  ensurePlayerShape(player, now);
+  updateCalendarProgress(player, now);
+  const taps = clamp(Math.floor(Number(requestedTaps) || 1), 1, 20);
+  const spent = Math.min(taps, Math.floor(player.resources.energy));
+  if (spent < 1) throw gameError('NO_SCAN_ENERGY', 'The scanner needs more Energy.');
+  const reward = spent * scanPower(player);
+  const scan = player.progression.signalEmpire.scan;
+  const beforeSignalMilestones = Math.floor(scan.taps / 25);
+  const beforePointMilestones = Math.min(10, beforeSignalMilestones);
+  scan.taps += spent;
+  const afterSignalMilestones = Math.floor(scan.taps / 25);
+  const afterPointMilestones = Math.min(10, afterSignalMilestones);
+  const points = grantSignalPoints(player, Math.max(0, afterPointMilestones - beforePointMilestones));
+  let discoveredSignal = null;
+  const reconUnlocked = player.progression.onboarding.step === 2 || player.progression.onboarding.completed || (player.rooms?.antenna?.level || 0) > 0;
+  if (afterSignalMilestones > beforeSignalMilestones && reconUnlocked && player.progression.recon.signals.length < 8) {
+    const generated = createSignals(player, now);
+    const source = generated[afterSignalMilestones % generated.length];
+    const sequence = `${dayKey(now).replaceAll('-', '')}_${scan.taps}`;
+    const candidate = {
+      ...source,
+      id: `scan_${sequence}`,
+      name: `ECHO-${String(afterSignalMilestones % 100).padStart(2, '0')}`,
+      market: { ...(source.market || {}) }
+    };
+    if (!player.progression.recon.signals.some(signal => signal.id === candidate.id)) {
+      player.progression.recon.signals.push(candidate);
+      discoveredSignal = signalView(player, candidate);
+    }
+  }
+  scan.pointsEarned += points;
+  player.resources.energy -= spent;
+  player.resources.data += reward;
+  player.hero.xp += Math.max(1, Math.floor(spent / 5));
+  updateHeroLevel(player);
+  return { taps: spent, intel: reward, signalPoints: points, tapPower: scanPower(player), discoveredSignal };
+}
+
+export function dailyComboTargets(now = new Date()) {
+  const random = seededRandom(`signal-combo:${dayKey(now)}`);
+  const pool = [...ROOM_ORDER];
+  for (let index = pool.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(random() * (index + 1));
+    [pool[index], pool[swap]] = [pool[swap], pool[index]];
+  }
+  return pool.slice(0, 3);
+}
+
+export function claimDailyCombo(player, moduleIds, now = new Date()) {
+  ensurePlayerShape(player, now);
+  updateCalendarProgress(player, now);
+  const combo = player.progression.signalEmpire.combo;
+  if (combo.claimed) throw gameError('COMBO_CLAIMED', 'Today\'s module combo is already complete.');
+  const selected = [...new Set(Array.isArray(moduleIds) ? moduleIds.map(String) : [])];
+  if (selected.length !== 3 || selected.some(id => !ROOM_ORDER.includes(id))) {
+    throw gameError('INVALID_COMBO', 'Select exactly three technology modules.');
+  }
+  combo.attempts += 1;
+  const target = dailyComboTargets(now);
+  const correct = target.every(id => selected.includes(id));
+  if (!correct) return { correct: false, attempts: combo.attempts };
+  combo.claimed = true;
+  const reward = { data: 1_500, components: 2, signalPoints: 40 };
+  applyReward(player, reward);
+  grantSignalPoints(player, reward.signalPoints);
+  return { correct: true, attempts: combo.attempts, reward };
+}
+
+export function dailyCipherCode(now = new Date()) {
+  const random = seededRandom(`signal-cipher:${dayKey(now)}`);
+  return DAILY_CIPHERS[Math.floor(random() * DAILY_CIPHERS.length)];
+}
+
+export function dailyCipherHint(now = new Date()) {
+  const code = dailyCipherCode(now);
+  return `${code[0]} ${Array.from({ length: Math.max(0, code.length - 2) }, () => '_').join(' ')} ${code.at(-1)}`;
+}
+
+export function claimDailyCipher(player, code, now = new Date()) {
+  ensurePlayerShape(player, now);
+  updateCalendarProgress(player, now);
+  const cipher = player.progression.signalEmpire.cipher;
+  if (cipher.claimed) throw gameError('CIPHER_CLAIMED', 'Today\'s cipher is already complete.');
+  const normalized = String(code || '').trim().toUpperCase();
+  if (normalized !== dailyCipherCode(now)) throw gameError('INVALID_CIPHER', 'The signal code is incorrect.');
+  cipher.claimed = true;
+  const reward = { data: 500, components: 1, signalPoints: 20 };
+  applyReward(player, reward);
+  grantSignalPoints(player, reward.signalPoints);
+  return { correct: true, reward };
+}
+
+export function airdropScore(player) {
+  const moduleLevels = ROOM_ORDER.reduce((sum, id) => sum + Number(player.rooms?.[id]?.level || 0), 0);
+  const breakdown = {
+    network: moduleLevels * 12,
+    accuracy: Number(player.progression?.season?.correct || 0) * 30 + Number(player.progression?.season?.attempts || 0) * 5,
+    activity: Math.min(42, Number(player.progression?.streak?.current || 0)) * 25,
+    xradar: Number(player.progression?.conversion?.rewarded?.length || 0) * 80,
+    referrals: Number(player.progression?.referrals?.total || 0) * 120,
+    signalPoints: Number(player.progression?.season?.signalPoints || 0)
+  };
+  return { total: Object.values(breakdown).reduce((sum, value) => sum + value, 0), breakdown };
+}
+
+export function leagueState(player) {
+  const score = airdropScore(player).total;
+  let index = 0;
+  for (let cursor = 0; cursor < LEAGUE_DEFS.length; cursor += 1) {
+    if (score >= LEAGUE_DEFS[cursor].min) index = cursor;
+  }
+  const current = LEAGUE_DEFS[index];
+  const next = LEAGUE_DEFS[index + 1] || null;
+  const progress = next ? clamp((score - current.min) / Math.max(1, next.min - current.min), 0, 1) : 1;
+  return { ...current, score, next, progress };
 }
 
 function grantItem(player, itemId) {
@@ -907,7 +1083,31 @@ export function calculateSignalRisk(signal) {
   return Math.round(clamp(liquidityRisk * 0.42 + concentrationRisk * 0.48 + mutableRisk - activityRelief, 0, 100));
 }
 
-export function resolveSignal(player, signalId, decision, now = new Date()) {
+const SIGNAL_EVIDENCE_IDS = Object.freeze(['thin_liquidity', 'holder_concentration', 'mutable_contract', 'abnormal_activity', 'no_critical_flags']);
+
+export function signalEvidenceFactors(signal) {
+  const relevant = [];
+  if (Number(signal?.liquidity || 0) < 45) relevant.push('thin_liquidity');
+  if (Number(signal?.concentration || 0) > 60) relevant.push('holder_concentration');
+  if (Boolean(signal?.mutable)) relevant.push('mutable_contract');
+  if (Number(signal?.activity || 0) > 82) relevant.push('abnormal_activity');
+  return relevant.length ? relevant : ['no_critical_flags'];
+}
+
+function assessSignalEvidence(signal, selectedFactors, analysisLevel = 0) {
+  const selected = [...new Set((Array.isArray(selectedFactors) ? selectedFactors : []).map(String).filter(id => SIGNAL_EVIDENCE_IDS.includes(id)))].slice(0, 5);
+  const available = new Set(['thin_liquidity', 'abnormal_activity']);
+  if (analysisLevel >= 6) available.add('mutable_contract');
+  if (analysisLevel >= 9) available.add('holder_concentration');
+  const visibleRelevant = signalEvidenceFactors(signal).filter(id => available.has(id));
+  const relevant = visibleRelevant.length ? visibleRelevant : ['no_critical_flags'];
+  const matched = selected.filter(id => relevant.includes(id));
+  const incorrect = selected.filter(id => !relevant.includes(id));
+  const score = Math.round(clamp((matched.length - incorrect.length * 0.5) / relevant.length * 100, 0, 100));
+  return { selected, relevant, matched, incorrect, score };
+}
+
+export function resolveSignal(player, signalId, decision, now = new Date(), selectedFactors = []) {
   ensurePlayerShape(player, now);
   requireIdleHero(player);
   if (!['study', 'skip'].includes(decision)) throw gameError('INVALID_DECISION', 'Choose to study or skip the signal.');
@@ -921,8 +1121,11 @@ export function resolveSignal(player, signalId, decision, now = new Date()) {
   const interceptor = player.rooms?.interceptor?.level || 0;
   const rareRandom = seededRandom(`rare:${player.telegramId}:${signal.id}:${player.progression.recon.round}`)();
   const rareComponent = correct && interceptor > 0 && rareRandom < Math.min(0.45, interceptor * 0.045) ? 1 : 0;
+  const evidence = assessSignalEvidence(signal, selectedFactors, analysis);
+  const evidenceData = correct ? Math.floor(evidence.score / 25) * 5 : 0;
+  const evidenceSignalPoints = correct && evidence.score >= 75 ? 2 : 0;
   const reward = correct
-    ? { data: 80, components: 1 + rareComponent, xp: 18 }
+    ? { data: 80 + evidenceData, components: 1 + rareComponent, xp: 18, evidenceData }
     : { data: 15 + Math.min(35, analysis * 4), components: 0, xp: 8 };
   applyReward(player, reward);
   updateHeroLevel(player);
@@ -936,6 +1139,8 @@ export function resolveSignal(player, signalId, decision, now = new Date()) {
     player.progression.daily.correct += 1;
     player.progression.season.correct += 1;
   }
+  reward.signalPoints = grantSignalPoints(player, (correct ? 12 : 3) + evidenceSignalPoints);
+  reward.evidenceSignalPoints = evidenceSignalPoints;
   if (player.progression.daily.attempts >= 5 && !player.progression.daily.rewardClaimed) {
     player.progression.daily.rewardClaimed = true;
     player.resources.components += 5;
@@ -943,7 +1148,7 @@ export function resolveSignal(player, signalId, decision, now = new Date()) {
   }
   const signalCopy = copyFor(playerLanguage(player)).signal;
   const explanation = safe ? signalCopy.safe(risk) : signalCopy.risky(risk);
-  const result = { signalId, decision, correct, safe, risk, reward, rareFind: Boolean(rareComponent), explanation, resolvedAt: new Date(now) };
+  const result = { signalId, decision, correct, safe, risk, reward, evidence, rareFind: Boolean(rareComponent), explanation, resolvedAt: new Date(now) };
   player.progression.recon.lastResult = result;
   player.progression.recon.signals = player.progression.recon.signals.filter(item => item.id !== signalId);
   player.progression.recon.round += 1;
@@ -1000,7 +1205,7 @@ export function importExternalSignals(player, wave, now = new Date()) {
   return player.progression.recon.signals;
 }
 
-export function resolveExternalSignal(player, signalId, decision, external, now = new Date()) {
+export function resolveExternalSignal(player, signalId, decision, external, now = new Date(), selectedFactors = []) {
   ensurePlayerShape(player, now);
   requireIdleHero(player);
   if (!['study', 'skip'].includes(decision)) throw gameError('INVALID_DECISION', 'Choose to study or skip the signal.');
@@ -1009,7 +1214,10 @@ export function resolveExternalSignal(player, signalId, decision, external, now 
   if (!external || typeof external.correct !== 'boolean') throw gameError('INVALID_WAVE_RESULT', 'XRadar did not confirm the outcome.', 502);
   const correct = external.correct;
   const liveCopy = copyFor(playerLanguage(player)).signal;
-  const reward = correct ? { data: 100, components: 2, xp: 22 } : { data: 20, components: 0, xp: 8 };
+  const evidence = assessSignalEvidence(signal, selectedFactors, player.rooms?.analysis?.level || 0);
+  const evidenceData = correct ? Math.floor(evidence.score / 25) * 5 : 0;
+  const evidenceSignalPoints = correct && evidence.score >= 75 ? 2 : 0;
+  const reward = correct ? { data: 100 + evidenceData, components: 2, xp: 22, evidenceData } : { data: 20, components: 0, xp: 8 };
   applyReward(player, reward);
   updateHeroLevel(player);
   player.stats.reconAttempts += 1;
@@ -1022,6 +1230,8 @@ export function resolveExternalSignal(player, signalId, decision, external, now 
     player.progression.daily.correct += 1;
     player.progression.season.correct += 1;
   }
+  reward.signalPoints = grantSignalPoints(player, (correct ? 15 : 4) + evidenceSignalPoints);
+  reward.evidenceSignalPoints = evidenceSignalPoints;
   if (player.progression.daily.attempts >= 5 && !player.progression.daily.rewardClaimed) {
     player.progression.daily.rewardClaimed = true;
     player.resources.components += 5;
@@ -1033,6 +1243,7 @@ export function resolveExternalSignal(player, signalId, decision, external, now 
     correct,
     risk: signal.riskScore,
     reward,
+    evidence,
     source: 'xradar',
     actualPct: Number(external.actualPct || 0),
     symbol: String(external.symbol || 'REVEALED'),
@@ -1268,6 +1479,21 @@ export function publicGameState(player, now = new Date()) {
       nextUpgrade: next, maxLevel: 10
     }];
   }));
+  const moduleStates = Object.fromEntries(ROOM_ORDER.map(id => {
+    const room = roomStates[id];
+    const level = Number(room.level || 0);
+    return [id, {
+      id,
+      ...MODULE_DEFS[id],
+      level,
+      unlocked: room.unlocked,
+      lockReason: room.lockReason,
+      construction: room.construction,
+      nextUpgrade: room.nextUpgrade,
+      maxLevel: room.maxLevel,
+      intelPerHour: level ? Math.round((LEVEL_CURVE[level]?.production || 0) * ROOM_FACTORS[id]) : 0
+    }];
+  }));
   const heroPoint = NAV_POINTS[player.hero.node] || NAV_POINTS.lab_center;
   const job = jobView(player.hero.job, now, lang);
   const secondaryJob = jobView(player.progression.secondaryJob, now, lang);
@@ -1280,6 +1506,8 @@ export function publicGameState(player, now = new Date()) {
     (player.rooms.analysis?.level || 0) >= 6 ? { id: 'analysis', title: c.conversion.analysis, target: 'terminal' } : null,
     recentHistory.length >= 5 && accuracy30 >= 60 ? { id: 'accuracy', title: c.conversion.accuracy(accuracy30), target: 'terminal' } : null
   ].filter(Boolean);
+  const airdrop = airdropScore(player);
+  const league = leagueState(player);
   return {
     schemaVersion: SCHEMA_VERSION,
     serverNow: new Date(now).toISOString(),
@@ -1318,6 +1546,8 @@ export function publicGameState(player, now = new Date()) {
     crew: crewView(player, lang),
     rooms: roomStates,
     roomOrder: ROOM_ORDER,
+    modules: moduleStates,
+    moduleOrder: ROOM_ORDER,
     objects: buildObjects(player, now, lang),
     tasks,
     recommendedTask: tasks[0] || null,
@@ -1333,7 +1563,7 @@ export function publicGameState(player, now = new Date()) {
       recon: {
         round: player.progression.recon.round,
         nextAt: player.progression.recon.nextAt,
-        unlocked: player.progression.onboarding.step === 2 || (player.rooms.antenna?.level || 0) > 0,
+        unlocked: player.progression.onboarding.step === 2 || player.progression.onboarding.completed || (player.rooms.antenna?.level || 0) > 0,
         requiresAntenna: player.progression.onboarding.completed && (player.rooms.antenna?.level || 0) === 0,
         signals: player.progression.recon.signals.map(signal => signalView(player, signal)),
         lastResult: player.progression.recon.lastResult
@@ -1371,6 +1601,30 @@ export function publicGameState(player, now = new Date()) {
       referrals: player.progression.referrals,
       returnReport: player.progression.returnReport,
       lastCompleted: player.progression.lastCompleted
+    },
+    gameplay: {
+      scan: {
+        ...player.progression.signalEmpire.scan,
+        tapPower: scanPower(player),
+        maxBatch: 20
+      },
+      combo: {
+        ...player.progression.signalEmpire.combo,
+        slots: 3,
+        reward: { data: 1_500, components: 2, signalPoints: 40 }
+      },
+      cipher: {
+        ...player.progression.signalEmpire.cipher,
+        length: 5,
+        hint: dailyCipherHint(now),
+        reward: { data: 500, components: 1, signalPoints: 20 }
+      },
+      league,
+      airdrop: {
+        ...airdrop,
+        seasonId: player.progression.season.id,
+        signalPoints: player.progression.season.signalPoints
+      }
     },
     stats: { ...player.stats, accuracy30, attempts30: recentHistory.length, correct30: recentCorrect },
     nav: { current: player.hero.node, accessibleFloors: highestOpenFloor(player) + 1 }

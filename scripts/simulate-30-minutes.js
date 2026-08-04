@@ -72,8 +72,8 @@ advancePlayer(player, now);
 mark('simulation:end');
 
 if (!player.progression.onboarding.completed) throw new Error('Onboarding did not complete.');
-if (player.rooms.lab.level < 3) throw new Error('Command Lab did not reach level 3.');
-if (player.rooms.power.level < 2) throw new Error('Power Room did not reach level 2.');
+if (player.rooms.lab.level < 3) throw new Error('Radar Core did not reach level 3.');
+if (player.rooms.power.level < 2) throw new Error('Power Cell did not reach level 2.');
 if (player.rooms.workshop.level < 1) throw new Error('Workshop did not open.');
 
 const gaps = events.slice(1).map((event, index) => event.second - events[index].second);

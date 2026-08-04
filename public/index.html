@@ -3,161 +3,181 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-  <meta name="theme-color" content="#0a1013">
+  <meta name="theme-color" content="#050505">
   <meta name="color-scheme" content="dark">
-  <title>XRadar Lab</title>
-  <meta name="description" content="Build an underground market intelligence station, decode signals and train your operator.">
+  <title>XRadar: Signal Empire</title>
+  <meta name="description" content="Build a crypto intelligence network, hunt market signals and climb the seasonal leagues.">
+  <meta name="application-name" content="XRadar Signal Empire">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="XRadar — See the market before it moves.">
+  <meta property="og:description" content="Build your market intelligence network, detect anomalies and create a verified signal record.">
+  <meta property="og:image" content="{{ORIGIN}}/og-v1.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="XRadar — See the market before it moves.">
+  <meta name="twitter:description" content="A premium market-intelligence game powered by verified signal behavior.">
+  <meta name="twitter:image" content="{{ORIGIN}}/og-v1.png">
+  <link rel="icon" href="/assets/xradar-mark.png">
+  <link rel="apple-touch-icon" href="/assets/xradar-mark.png">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <div class="app-shell">
+    <section id="auth" class="auth-screen">
+      <div class="auth-art" aria-hidden="true">
+        <div class="auth-orbit"><i></i><i></i><i></i><span></span></div>
+        <div class="auth-telemetry"><span>MARKET PULSE</span><b>24.7</b><small>LIVE NETWORK</small></div>
+      </div>
+      <div class="auth-shade"></div>
+      <div class="auth-content">
+        <div class="brand-row"><img src="/assets/xradar-mark.png" alt=""><b>XRADAR</b><em>INTELLIGENCE NETWORK</em></div>
+        <div class="auth-copy">
+          <span class="kicker" data-i18n="authKicker">BUILD YOUR INTELLIGENCE NETWORK</span>
+          <h1 data-i18n="authTitle">Catch the signal before the market does.</h1>
+          <p data-i18n="authText">Scan live anomalies, upgrade your technology and earn a place in the seasonal airdrop ranking.</p>
+        </div>
+        <button id="authButton" class="action-button auth-button hidden" type="button" data-i18n="enter">Enter network</button>
+        <div id="authStatus" class="auth-status" data-i18n="connecting">Establishing secure uplink…</div>
+      </div>
+    </section>
 
-<!-- Icon sprite. Lucide geometry: 24x24, 2px stroke, round caps and joins.
-     Inline so there is no request, no flash, and every icon inherits
-     currentColor from its container. -->
-<svg id="icon-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
-  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
-  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
-  <symbol id="i-radio" viewBox="0 0 24 24"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></symbol>
-  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
-  <symbol id="i-package" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
-  <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
-  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
-  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
-  <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></symbol>
-  <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
-  <symbol id="i-inbound" viewBox="0 0 24 24"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></symbol>
-  <symbol id="i-elevator" viewBox="0 0 24 24"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></symbol>
-  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
-  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
-  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
-  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol>
-  <symbol id="i-sound-on" viewBox="0 0 24 24"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6a1.4 1.4 0 0 1-1 .4H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.4 5.6a9 9 0 0 1 0 12.7"/></symbol>
-  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
-  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
-  <symbol id="i-sound-off" viewBox="0 0 24 24"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6a1.4 1.4 0 0 1-1 .4H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></symbol>
-</svg>
+    <section id="game" class="game hidden">
+      <header class="topbar">
+        <button class="resource-pill" data-resource="intel" type="button">
+          <span class="resource-icon intel-icon">I</span>
+          <span><b id="intelValue">0</b><small data-i18n="intel">Intel</small></span>
+        </button>
+        <button class="resource-pill" data-resource="energy" type="button">
+          <span class="resource-icon energy-icon">ϟ</span>
+          <span><b id="energyValue">0/0</b><small data-i18n="energy">Energy</small></span>
+        </button>
+        <button class="resource-pill" data-resource="chips" type="button">
+          <span class="resource-icon chip-icon">◆</span>
+          <span><b id="chipsValue">0</b><small data-i18n="chips">Chips</small></span>
+        </button>
+        <button id="leagueButton" class="league-chip" type="button">
+          <span id="leagueMark">O</span><small id="leagueName">Observer</small>
+        </button>
+      </header>
 
-<div class="app">
-  <section id="auth" class="auth">
-    <div class="auth-card">
-      <div class="brand-mark"></div>
-      <div class="eyebrow">Underground intelligence station</div>
-      <h1>XRadar <span>Lab</span></h1>
-      <p>Build the station. Read market signals. Turn better decisions into progress.</p>
-      <button id="authButton" class="primary full hidden" type="button">Enter the Lab</button>
-      <small id="authStatus">Establishing a secure connection…</small>
-    </div>
-  </section>
-
-  <section id="game" class="game hidden" data-neon="cyan" data-floor="steel" data-skin="standard">
-    <header class="hud">
-      <button class="resource" data-resource-info="intel" type="button" aria-label="Intel">
-        <svg class="icon" aria-hidden="true"><use href="#i-database"/></svg>
-        <span><b id="intelValue">0</b><small>Intel</small></span>
-      </button>
-      <button class="resource" data-resource-info="power" type="button" aria-label="Power">
-        <svg class="icon" aria-hidden="true"><use href="#i-zap"/></svg>
-        <span><b id="powerValue">0</b><small>Power</small></span>
-      </button>
-      <button class="resource parts" data-resource-info="parts" type="button" aria-label="Parts">
-        <svg class="icon" aria-hidden="true"><use href="#i-wrench"/></svg>
-        <span><b id="partsValue">0</b><small>Parts</small></span>
-      </button>
-      <button id="levelButton" class="level" type="button" aria-label="Operator level and experience">
-        <svg class="level-ring" viewBox="0 0 44 44" aria-hidden="true">
-          <circle class="track" cx="22" cy="22" r="19"/>
-          <circle class="value" id="xpRing" cx="22" cy="22" r="19" stroke-dasharray="119.4" stroke-dashoffset="119.4"/>
-        </svg>
-        <b id="levelValue" class="level-value">1</b>
-        <small>Level</small>
-      </button>
-    </header>
-
-    <main class="main">
-      <section id="tab-lab" class="tab lab-tab active">
-        <div class="scene">
-          <!-- Flat cutaway. Eight floors stacked, one shaft down the right.
-               Every box is drawn from the payload, so the station is never a
-               picture that disagrees with the save. -->
-          <div id="sceneMedia" class="scene-media">
-            <div class="shaft" aria-hidden="true"><i class="shaft-rail"></i><i id="elevatorCar" class="elevator-car"></i></div>
-            <div id="station" class="station"></div>
-            <div id="spots" class="spots" aria-label="Station objects"></div>
-            <div class="scanlines" aria-hidden="true"></div>
-            <div id="operatorUnit" class="unit operator-unit idle" data-gender="custom" aria-label="XRadar operator">
-              <i class="unit-shadow"></i><span class="unit-sprite"></span><span class="unit-equipment"><i class="eq-head"></i><i class="eq-body"></i><i class="eq-tool"></i></span><b id="operatorUnitLabel">Operator</b>
+      <main class="screens">
+        <section id="screen-radar" class="screen radar-screen active">
+          <div class="radar-stage">
+            <div class="hero-art" aria-hidden="true"></div>
+            <div class="stage-vignette" aria-hidden="true"></div>
+            <div class="stage-header"><span><i></i><em data-i18n="liveMarket">LIVE MARKET</em></span><b data-i18n="globalSignalMap">GLOBAL SIGNAL MAP</b></div>
+            <div class="radar-ui" id="radarUi" aria-label="Market signal radar">
+              <div class="radar-ring ring-one"></div>
+              <div class="radar-ring ring-two"></div>
+              <div class="radar-cross cross-x"></div>
+              <div class="radar-cross cross-y"></div>
+              <div class="radar-sweep"></div>
+              <div id="signalBlips" class="signal-blips"></div>
+              <button id="scanButton" class="scan-core" type="button" aria-label="Scan market">
+                <span class="scan-core-inner"><b id="tapPower">+3</b><small data-i18n="scan">SCAN</small></span>
+              </button>
+              <span id="scanHint" class="scan-hint" data-i18n="scanHint">TAP · 1 ENERGY</span>
             </div>
-            <div id="engineerUnit" class="unit engineer-unit hidden idle" aria-label="Station engineer"><i class="unit-shadow"></i><span class="unit-sprite"></span><b>Mara</b></div>
+            <div id="tapFx" class="tap-fx" aria-hidden="true"></div>
+            <button id="marketEvent" class="market-event hidden" type="button"><span>!</span><b data-i18n="marketEvent">MARKET EVENT</b></button>
+            <div class="radar-status">
+              <div><span class="live-dot"></span><small data-i18n="networkOnline">NETWORK ONLINE</small></div>
+              <b id="profitHour">0 Intel/h</b>
+            </div>
+            <button id="storyAction" class="story-action hidden" type="button"><span></span><b></b><em>›</em></button>
           </div>
-          <button id="soundButton" class="scene-sound" type="button" aria-label="Toggle station ambience" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-sound-off"/></svg></button>
-          <div class="scene-title"><b id="sceneTitle">Command Lab</b><span id="stationStatus">Command systems initializing</span></div>
-          <div class="goal">
-            <button id="goalButton" class="goal-main" type="button">
-              <svg class="icon" aria-hidden="true"><use href="#i-flag"/></svg>
-              <span><small id="goalLabel">Current directive</small><b id="goalText">Restore the Lab</b></span>
+
+          <div class="radar-dashboard">
+            <article class="scan-milestone-card">
+              <div class="milestone-copy"><span><small data-i18n="nextSignal">NEXT SIGNAL</small><b id="scanProgressText">0 / 25 pulses</b></span><em id="scanProgressReward">+1 SP</em></div>
+              <div class="milestone-track"><i id="scanProgressBar"></i></div>
+            </article>
+            <div id="marketTape" class="market-tape"></div>
+            <button id="signalQueue" class="quick-card signal-queue" type="button">
+              <span class="quick-symbol">⌁</span>
+              <span><small data-i18n="signalsDetected">SIGNALS DETECTED</small><b id="signalCount">0 waiting</b></span>
+              <em>›</em>
             </button>
-            <button id="operationsButton" class="goal-more" type="button" aria-label="Open operations"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-target"/></svg></button>
-          </div>
-          <div id="jobStrip" class="job hidden"><div class="job-top"><b id="jobTitle">Working</b><span id="jobTime" class="job-time">0:00</span></div><div class="progress"><i id="jobBar"></i></div><div id="secondaryJob" class="secondary-job hidden"></div></div>
-          <button id="incidentButton" class="alert-orb" type="button" aria-label="Open station incident"><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg></button>
-          <div id="resourceFx" class="resource-fx" aria-hidden="true"></div>
-        </div>
-      </section>
-
-      <section id="tab-crew" class="tab">
-        <div class="screen-head"><div class="eyebrow">Personnel system</div><h2>Crew</h2><p>Your operator is part of the station, not a profile badge.</p></div>
-        <div class="screen-body">
-          <div id="operatorVisual" class="operator" data-gender="custom">
-            <div class="operator-preview-sprite" aria-hidden="true"></div><span class="preview-equipment"><i class="eq-head"></i><i class="eq-body"></i><i class="eq-tool"></i></span>
-            <div class="operator-copy"><b id="operatorName">Operator</b><span>Field Intelligence Lead</span></div>
-          </div>
-          <div id="crewStats" class="stat-grid"></div>
-          <div class="card accent">
-            <div class="card-top"><div><h3>Operator profile</h3><p>Every setting changes the visible station character.</p></div><span class="tag">Persistent</span></div>
-            <div class="editor-grid">
-              <div class="field"><label for="callSign">Call sign</label><input id="callSign" type="text" maxlength="18" value="Operator"></div>
-              <div class="field field-wide"><label>Body profile</label><div class="portrait-options"><button data-gender="female" type="button">Female</button><button data-gender="male" type="button">Male</button><button data-gender="custom" type="button">Custom</button></div></div>
-              <div class="field"><label for="rangeFace">Face profile</label><input id="rangeFace" data-editor-range="face" type="range" min="1" max="6" value="3"></div>
-              <div class="field"><label for="rangeBuild">Body build</label><input id="rangeBuild" data-editor-range="build" type="range" min="1" max="5" value="3"></div>
-              <div class="field"><label for="rangeHair">Hair tone</label><input id="rangeHair" data-editor-range="hair" type="range" min="1" max="8" value="4"></div>
-              <div class="field"><label for="rangeGear">Suit accent</label><input id="rangeGear" data-editor-range="gear" type="range" min="1" max="5" value="2"></div>
+            <div class="quick-grid">
+              <button id="comboShortcut" class="quick-card compact" type="button"><span class="quick-symbol amber">◇</span><span><small data-i18n="dailyCombo">DAILY COMBO</small><b id="comboState">Ready</b></span></button>
+              <button id="airdropShortcut" class="quick-card compact" type="button"><span class="quick-symbol violet">▲</span><span><small data-i18n="seasonScore">SEASON SCORE</small><b id="airdropScore">0 pts</b></span></button>
             </div>
-            <button id="saveOperator" class="primary full" type="button">Save operator</button>
           </div>
-          <div class="section-title">Station crew</div><div id="crewList" class="card"></div>
-          <div class="section-title">Settings</div><div id="settingsCard" class="card option-list"></div>
-          <div class="section-title">Station appearance</div><div id="cosmeticList" class="card option-list"></div>
-          <div class="section-title">Referral access</div><div id="referralCard" class="card"></div>
-        </div>
-      </section>
+        </section>
 
-      <section id="tab-signals" class="tab">
-        <div class="screen-head"><div class="eyebrow">Market intelligence</div><h2>Signals</h2><p>Read the evidence. Advanced rooms reveal more, but never decide for you.</p></div>
-        <div id="signalsBody" class="screen-body"></div>
-      </section>
+        <section id="screen-upgrades" class="screen scroll-screen">
+          <div class="section-head">
+            <span class="kicker" data-i18n="networkTech">NETWORK TECHNOLOGY</span>
+            <h2 data-i18n="upgradeTitle">Build your edge</h2>
+            <p data-i18n="upgradeText">Every module increases passive Intel and unlocks stronger market signals.</p>
+          </div>
+          <div class="income-banner"><span><small data-i18n="passiveIncome">PASSIVE INCOME</small><b id="upgradeIncome">0 Intel/h</b></span><span><small data-i18n="offlineStorage">OFFLINE STORAGE</small><b id="storageHours">6h</b></span></div>
+          <div id="moduleGrid" class="module-grid"></div>
+        </section>
 
-    </main>
+        <section id="screen-signals" class="screen scroll-screen">
+          <div class="section-head">
+            <span class="kicker" data-i18n="marketIntel">MARKET INTELLIGENCE</span>
+            <h2 data-i18n="signalTitle">Intercepted signals</h2>
+            <p data-i18n="signalText">Read the evidence, make a call and build an accuracy streak.</p>
+          </div>
+          <div id="signalSummary" class="accuracy-strip"></div>
+          <div id="signalList" class="signal-list"></div>
+        </section>
 
-    <!-- Three destinations. Operations and Storage are not places you navigate
-         to — they are overlays over the station, reached from the thing they
-         describe: the directive plate and the equipment locker. -->
-    <nav class="nav" id="nav">
-      <button class="active" data-tab="lab" type="button"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg><span class="label">Station</span></button>
-      <button data-tab="signals" type="button"><svg class="icon" aria-hidden="true"><use href="#i-radio"/></svg><span class="label">Signals</span></button>
-      <button data-tab="crew" type="button"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg><span class="label">Operator</span></button>
-    </nav>
+        <section id="screen-missions" class="screen scroll-screen">
+          <div class="section-head">
+            <span class="kicker" data-i18n="dailyOps">DAILY OPERATIONS</span>
+            <h2 data-i18n="missionTitle">Return with a purpose</h2>
+            <p data-i18n="missionText">Daily puzzles, signal forecasts and network objectives grow your season score.</p>
+          </div>
+          <div id="missionStory"></div>
+          <div id="streakCard"></div>
+          <div id="commandBrief"></div>
+          <article class="mission-card combo-card">
+            <div class="card-title"><span class="card-glyph amber">◇</span><div><small data-i18n="resetsDaily">RESETS DAILY</small><h3 data-i18n="comboTitle">Module Combo</h3></div><b id="comboReward">+40 SP</b></div>
+            <p data-i18n="comboText">Select today's secret set of three technologies.</p>
+            <div id="comboSlots" class="combo-slots"></div>
+            <button id="comboSubmit" class="secondary-button" type="button" data-i18n="checkCombo">Check combination</button>
+          </article>
+          <article class="mission-card cipher-card">
+            <div class="card-title"><span class="card-glyph cyan">⌁</span><div><small data-i18n="oneCodeDaily">ONE CODE DAILY</small><h3 data-i18n="cipherTitle">Signal Cipher</h3></div><b>+20 SP</b></div>
+            <p data-i18n="cipherText">Decode the five-letter market word shared by the community.</p>
+            <div class="cipher-input"><input id="cipherInput" type="text" maxlength="5" autocomplete="off" spellcheck="false" placeholder="_ _ _ _ _"><button id="cipherSubmit" type="button" data-i18n="decode">Decode</button></div>
+          </article>
+          <div id="dailyStats" class="daily-stats"></div>
+        </section>
 
-    <aside id="sheet" class="sheet" aria-live="polite">
-      <div class="sheet-grip"><i></i></div>
-      <div class="sheet-head"><div><h3 id="sheetTitle">System</h3><p id="sheetStatus"></p></div><button id="sheetClose" class="sheet-close" type="button" aria-label="Close"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg></button></div>
-      <div id="sheetBody" class="sheet-body"></div>
-    </aside>
-    <div id="returnModal" class="modal hidden"><div class="modal-card"><small>Station report</small><h2>Welcome back, Operator</h2><p id="returnText"></p><button id="returnAccept" class="primary" type="button">Collect report</button></div></div>
-    <div id="toast" class="toast"></div>
-  </section>
-</div>
-<script type="module" src="/app.js"></script>
+        <section id="screen-network" class="screen scroll-screen">
+          <div class="section-head network-head">
+            <span class="kicker" data-i18n="seasonNetwork">SEASON NETWORK</span>
+            <h2 id="profileName">Operator</h2>
+            <p data-i18n="networkText">Climb the leagues. Build a verified record. Prepare for the seasonal snapshot.</p>
+          </div>
+          <article id="leagueCard" class="league-card"></article>
+          <article class="breakdown-card"><div class="card-title"><span class="card-glyph violet">▲</span><div><small data-i18n="estimated">ESTIMATED</small><h3 data-i18n="airdropTitle">Airdrop score</h3></div><b id="scoreTotal">0</b></div><div id="scoreBreakdown" class="score-breakdown"></div></article>
+          <article class="referral-card"><div class="card-title"><span class="card-glyph cyan">↗</span><div><small data-i18n="growNetwork">GROW THE NETWORK</small><h3 data-i18n="referralTitle">Qualified referrals</h3></div></div><p data-i18n="referralText">A referral qualifies only after real play and a completed signal assessment.</p><div class="ref-code"><code id="referralCode">XR000</code><button id="shareReferral" type="button" data-i18n="share">Share</button></div><div class="ref-connect"><input id="referralInput" maxlength="20" data-i18n-placeholder="refPlaceholder" placeholder="Referral code"><button id="connectReferral" type="button" data-i18n="connect">Connect</button></div></article>
+          <article class="settings-card"><div class="settings-row"><span><small data-i18n="language">LANGUAGE</small><b data-i18n="interfaceLanguage">Interface language</b></span><div class="language-toggle"><button data-language="en" type="button">EN</button><button data-language="ru" type="button">RU</button></div></div><div class="settings-row"><span><small>XRADAR</small><b data-i18n="fullAnalysis">Full market analysis</b></span><button id="openXradar" class="inline-link" type="button" data-i18n="open">Open ↗</button></div></article>
+        </section>
+      </main>
+
+      <nav class="bottom-nav" id="bottomNav">
+        <button class="active" data-screen="radar" type="button"><span>◎</span><small data-i18n="navRadar">Radar</small></button>
+        <button data-screen="upgrades" type="button"><span>⬡</span><small data-i18n="navUpgrades">Upgrade</small></button>
+        <button data-screen="signals" type="button"><span>⌁</span><small data-i18n="navSignals">Signals</small><i id="signalBadge" class="nav-badge hidden">0</i></button>
+        <button data-screen="missions" type="button"><span>✓</span><small data-i18n="navMissions">Missions</small></button>
+        <button data-screen="network" type="button"><span>△</span><small data-i18n="navNetwork">Network</small></button>
+      </nav>
+
+      <aside id="sheet" class="sheet" role="dialog" aria-modal="true" aria-hidden="true" aria-live="polite">
+        <div class="sheet-grip"></div>
+        <div class="sheet-header"><div><small id="sheetEyebrow"></small><h3 id="sheetTitle">Signal</h3></div><button id="sheetClose" type="button" aria-label="Close">×</button></div>
+        <div id="sheetBody" class="sheet-body"></div>
+      </aside>
+      <div id="modal" class="modal hidden"><div class="modal-card"><span id="modalKicker" class="kicker"></span><h2 id="modalTitle"></h2><p id="modalText"></p><button id="modalButton" class="action-button" type="button"></button></div></div>
+      <div id="toast" class="toast" role="status"></div>
+    </section>
+  </div>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

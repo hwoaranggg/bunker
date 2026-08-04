@@ -4,8 +4,13 @@ import {
   SCHEMA_VERSION,
   LEVEL_CURVE,
   advancePlayer,
+  claimDailyCipher,
+  claimDailyCombo,
   calculateSignalRisk,
   createPlayer,
+  dailyCipherCode,
+  dailyCipherHint,
+  dailyComboTargets,
   dataProductionPerHour,
   ensurePlayerShape,
   equipItem,
@@ -14,9 +19,11 @@ import {
   moveHero,
   offlineCapacityHours,
   openRoomCount,
+  performScan,
   publicGameState,
   resolveIncident,
   resolveSignal,
+  signalEvidenceFactors,
   roomAccess,
   roomCost,
   startConstruction,
@@ -136,6 +143,23 @@ test('результат разведки следует из видимых п�
   assert.equal(player.progression.onboarding.step, 3);
 });
 
+test('аналитическая гипотеза оценивается сервером и усиливает награду только за видимые факторы', () => {
+  const now = at('2026-01-01T00:00:00Z');
+  const player = createPlayer({ telegramId: 331, now });
+  player.progression.onboarding.step = 2;
+  player.rooms.analysis.level = 9;
+  const signal = player.progression.recon.signals[0];
+  Object.assign(signal, { liquidity: 30, concentration: 74, mutable: true, activity: 91 });
+  const factors = signalEvidenceFactors(signal);
+  assert.deepEqual(factors, ['thin_liquidity', 'holder_concentration', 'mutable_contract', 'abnormal_activity']);
+  const result = resolveSignal(player, signal.id, 'skip', now, [...factors, 'unknown_factor', 'thin_liquidity']);
+  assert.equal(result.correct, true);
+  assert.equal(result.evidence.score, 100);
+  assert.equal(result.evidence.selected.length, 4);
+  assert.equal(result.reward.evidenceData, 20);
+  assert.equal(result.reward.evidenceSignalPoints, 2);
+});
+
 test('поставка выдаёт 2–4 компонента и возвращается через шесть часов', () => {
   const now = at('2026-01-01T00:00:00Z');
   const player = createPlayer({ telegramId: 1, now });
@@ -195,6 +219,10 @@ test('серверное происшествие блокирует обычн�
   player.progression.onboarding.completed = true;
   const active = startIncident(player, now);
   assert.equal(active.type, 'security_breach');
+  assert.equal(publicGameState(player, now).progression.incidents.active.title, 'Wallet cluster breach');
+  updateLanguage(player, 'ru');
+  assert.equal(publicGameState(player, now).progression.incidents.active.title, 'Атака кластера кошельков');
+  updateLanguage(player, 'en');
   assert.equal(player.crew.operator.status, 'alert');
   assert.throws(() => startObjectAction(player, 'terminal_sync', now, 1), error => error.code === 'INCIDENT_ACTIVE');
   const beforeData = player.resources.data;
@@ -336,14 +364,14 @@ test('язык переключается на живом сохранении �
   assert.equal(player.profile.language, 'en');
 
   const english = publicGameState(player, now);
-  assert.equal(english.rooms.lab.name, 'Command Lab');
+  assert.equal(english.rooms.lab.name, 'Radar Core');
   assert.equal(english.tasks[0].title, 'Restore the lights');
   assert.equal(english.progression.inventory.items.field_coat.name, 'Field Operations Coat');
 
   updateLanguage(player, 'ru');
   const russian = publicGameState(player, now);
   assert.equal(russian.profile.language, 'ru');
-  assert.equal(russian.rooms.lab.name, 'Командная лаборатория');
+  assert.equal(russian.rooms.lab.name, 'Ядро радара');
   assert.equal(russian.tasks[0].title, 'Вернуть свет');
   assert.equal(russian.progression.inventory.items.field_coat.name, 'Полевая куртка');
   // Structural facts must survive a language switch untouched.
@@ -365,7 +393,7 @@ test('локаль Telegram задаёт язык только при созда
   delete legacy.profile.language;
   ensurePlayerShape(legacy, now);
   assert.equal(legacy.profile.language, 'en');
-  assert.equal(publicGameState(legacy, now).rooms.lab.name, 'Command Lab');
+  assert.equal(publicGameState(legacy, now).rooms.lab.name, 'Radar Core');
 });
 
 test('station incidents rotate instead of repeating one alarm', () => {
@@ -383,4 +411,69 @@ test('station incidents rotate instead of repeating one alarm', () => {
     advancePlayer(player, now);
   }
   assert.deepEqual(seen, ['security_breach', 'coolant_leak', 'power_surge', 'signal_spoof']);
+});
+
+test('Signal Empire scan spends server energy and grants capped seasonal points', () => {
+  const now = at('2026-01-01T00:00:00Z');
+  const player = createPlayer({ telegramId: 81, now });
+  const beforeIntel = player.resources.data;
+  const beforeEnergy = player.resources.energy;
+  const first = performScan(player, 20, now);
+  const second = performScan(player, 5, now);
+  assert.equal(first.taps, 20);
+  assert.equal(first.intel, first.tapPower * 20);
+  assert.equal(player.resources.energy, beforeEnergy - 25);
+  assert.equal(player.resources.data, beforeIntel + first.intel + second.intel);
+  assert.equal(player.progression.signalEmpire.scan.taps, 25);
+  assert.equal(player.progression.season.signalPoints, 1);
+  assert.throws(() => performScan({ ...player, resources: { ...player.resources, energy: 0 } }, 1, now), error => error.code === 'NO_SCAN_ENERGY');
+});
+
+test('active scanning discovers a playable signal at each 25-tap milestone', () => {
+  const now = at('2026-01-01T00:00:00Z');
+  const player = createPlayer({ telegramId: 811, now });
+  player.progression.onboarding = { step: 5, completed: true };
+  player.progression.recon.signals = [];
+  player.resources.energy = 100;
+  assert.equal(performScan(player, 20, now).discoveredSignal, null);
+  const result = performScan(player, 5, now);
+  assert.equal(result.discoveredSignal.name, 'ECHO-01');
+  assert.equal(player.progression.recon.signals.length, 1);
+  assert.equal(publicGameState(player, now).progression.recon.unlocked, true);
+  player.progression.recon.signals = [];
+  player.progression.signalEmpire.scan.taps = 250;
+  player.resources.energy = 30;
+  const lateResult = performScan(player, 20, now);
+  const nextMilestone = performScan(player, 5, now);
+  assert.equal(lateResult.discoveredSignal, null);
+  assert.equal(nextMilestone.discoveredSignal.name, 'ECHO-11');
+  assert.equal(nextMilestone.signalPoints, 0);
+});
+
+test('Daily Combo is global for the day and can be claimed only once', () => {
+  const now = at('2026-01-02T00:00:00Z');
+  const player = createPlayer({ telegramId: 82, now });
+  const targets = dailyComboTargets(now);
+  assert.equal(targets.length, 3);
+  const before = player.progression.season.signalPoints;
+  const result = claimDailyCombo(player, [...targets].reverse(), now);
+  assert.equal(result.correct, true);
+  assert.equal(player.progression.signalEmpire.combo.claimed, true);
+  assert.equal(player.progression.season.signalPoints, before + 40);
+  assert.throws(() => claimDailyCombo(player, targets, now), error => error.code === 'COMBO_CLAIMED');
+});
+
+test('Daily Cipher validates the shared code and public state exposes Signal Empire', () => {
+  const now = at('2026-01-03T00:00:00Z');
+  const player = createPlayer({ telegramId: 83, now });
+  assert.throws(() => claimDailyCipher(player, 'WRONG', now), error => error.code === 'INVALID_CIPHER');
+  claimDailyCipher(player, dailyCipherCode(now).toLowerCase(), now);
+  const view = publicGameState(player, now);
+  assert.equal(view.gameplay.cipher.claimed, true);
+  assert.equal(view.gameplay.cipher.hint, dailyCipherHint(now));
+  assert.match(view.gameplay.cipher.hint, /^[A-Z] _ _ _ [A-Z]$/);
+  assert.equal(view.gameplay.airdrop.signalPoints, 20);
+  assert.equal(view.modules.lab.slug, 'radar_core');
+  assert.equal(view.moduleOrder.length, 8);
+  assert.equal(view.gameplay.league.id, 'observer');
 });

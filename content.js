@@ -34,49 +34,49 @@ export function copyFor(language) {
 const en = {
   rooms: {
     lab: {
-      name: 'Command Lab',
-      short: 'The intelligence terminal and central operations floor.',
+      name: 'Radar Core',
+      short: 'The primary intelligence engine for active market scanning.',
       effect: 'Produces Intel. Higher levels sharply increase hourly output.',
       xradar: 'Trading terminal and core analytics'
     },
     power: {
-      name: 'Power Room',
-      short: 'The station grid, reserve cells and emergency machinery.',
+      name: 'Power Cell',
+      short: 'Expands the energy reserve and accelerates regeneration.',
       effect: '+25 maximum Power and faster regeneration per level.',
       xradar: 'Reliable infrastructure'
     },
     workshop: {
-      name: 'Workshop & Storage',
-      short: 'Engineering tools, recovered parts and protected storage.',
+      name: 'Chip Forge',
+      short: 'Optimizes rare hardware and extends offline intelligence storage.',
       effect: 'Extends offline storage and discounts late upgrades.',
       xradar: 'Position protection and tooling'
     },
     comms: {
-      name: 'Communications Hub',
-      short: 'A low-latency backbone for every station system.',
+      name: 'Market Feed',
+      short: 'A low-latency backbone for live market telemetry.',
       effect: 'Reduces all construction time by 4% per level, up to 40%.',
       xradar: 'Live market data stream'
     },
     automation: {
-      name: 'Automation Servers',
+      name: 'Auto Scan',
       short: 'Autonomous market monitoring while the operator is away.',
       effect: '+15% offline Intel production per level.',
       xradar: 'Automated monitoring'
     },
     antenna: {
-      name: 'Signal Array',
+      name: 'Whale Tracker',
       short: 'Receives larger batches of external market observations.',
       effect: 'Adds more signals to each intelligence wave.',
       xradar: 'New token feed'
     },
     analysis: {
-      name: 'Risk Analysis Center',
+      name: 'Risk Decoder',
       short: 'Reveals risk bands, mint authority and holder concentration.',
       effect: 'More evidence becomes visible at levels 3, 6 and 9.',
       xradar: 'Safety scoring'
     },
     interceptor: {
-      name: 'Wallet Interceptor',
+      name: 'Alpha Interceptor',
       short: 'Observes coordinated activity from large wallets.',
       effect: 'Shows smart-wallet activity and enables rare Part finds.',
       xradar: 'Smart-wallet leaderboard'
@@ -93,39 +93,39 @@ const en = {
   },
 
   achievements: {
-    level_five_room: { title: 'Deep specialization', description: 'Upgrade any room to level 5.' },
-    full_station: { title: 'Station complete', description: 'Open all eight station rooms.' },
+    level_five_room: { title: 'Deep specialization', description: 'Upgrade any intelligence module to level 5.' },
+    full_station: { title: 'Full intelligence stack', description: 'Unlock all eight network modules.' },
     veteran_operator: { title: 'Veteran operator', description: 'Reach operator level 10.' }
   },
 
   incidents: {
     security_breach: {
-      title: 'Security breach',
-      description: 'An unknown device is probing the station network while the surface lock reports forced entry.',
+      title: 'Wallet cluster breach',
+      description: 'A coordinated wallet cluster is probing thin liquidity across the monitored market.',
       outcomes: {
-        lockdown: { label: 'Lock down the elevator', message: 'Elevator sealed. The intrusion team withdrew.' },
-        isolate: { label: 'Isolate the signal network', message: 'Signal network isolated. The hostile probe was contained.' }
+        lockdown: { label: 'Freeze exposed routes', message: 'Exposed routes frozen. The wallet cluster lost access.' },
+        isolate: { label: 'Isolate the wallet cluster', message: 'The coordinated cluster was isolated and contained.' }
       }
     },
     coolant_leak: {
-      title: 'Coolant leak',
-      description: 'A fractured coolant line is overheating the automation racks.',
+      title: 'Liquidity drain',
+      description: 'Liquidity depth is collapsing across a group of correlated assets.',
       outcomes: {
-        vent: { label: 'Vent the server room', message: 'Pressure released. The racks are stable.' },
-        seal: { label: 'Seal and recycle coolant', message: 'The fracture was sealed and spare material recovered.' }
+        vent: { label: 'Exit thin pools', message: 'Thin pools were removed from the active watchlist.' },
+        seal: { label: 'Deploy liquidity filter', message: 'The liquidity filter contained the drain and recovered useful data.' }
       }
     },
     power_surge: {
-      title: 'Grid overload',
-      description: 'A surface surge is cascading through the lower station grid.',
+      title: 'Volatility surge',
+      description: 'A rapid volume spike is distorting short-term market behavior.',
       outcomes: {
-        reroute: { label: 'Reroute through reserve cells', message: 'The surge was absorbed by reserve cells.' },
-        shutdown: { label: 'Shut down noncritical systems', message: 'Noncritical systems went dark and the grid recovered.' }
+        reroute: { label: 'Route through deep liquidity', message: 'The volatility spike was absorbed by deeper liquidity.' },
+        shutdown: { label: 'Pause unstable feeds', message: 'Unstable feeds were paused and the model recovered.' }
       }
     },
     signal_spoof: {
       title: 'Spoofed market signal',
-      description: 'A forged feed is attempting to poison the station analysis models.',
+      description: 'A forged feed is attempting to poison the network analysis models.',
       outcomes: {
         trace: { label: 'Trace the hostile relay', message: 'The relay was traced and its data cache recovered.' },
         purge: { label: 'Purge the contaminated feed', message: 'The forged feed was removed before it reached analysis.' }
@@ -248,9 +248,9 @@ const en = {
   },
 
   build: {
-    upgrade: 'Upgrade room',
-    open: 'Open new floor',
-    floorOpened: room => `${room}: floor opened`,
+    upgrade: 'Upgrade module',
+    open: 'Unlock new module',
+    floorOpened: room => `${room}: module online`,
     upgradeComplete: room => `${room}: upgrade complete`,
     opening: room => `Opening ${room}`,
     upgrading: room => `Upgrading ${room}`
@@ -274,57 +274,57 @@ const en = {
 
   misc: {
     operationComplete: 'Operation complete',
-    stationUpdated: 'Station systems updated',
-    incidentContained: 'Security incident contained'
+    stationUpdated: 'Intelligence network updated',
+    incidentContained: 'Market event resolved'
   }
 };
 
 const ru = {
   rooms: {
     lab: {
-      name: 'Командная лаборатория',
-      short: 'Разведтерминал и центральный операционный этаж.',
+      name: 'Ядро радара',
+      short: 'Основной аналитический движок для активного сканирования рынка.',
       effect: 'Производит данные. Высокие уровни резко поднимают добычу в час.',
       xradar: 'Торговый терминал и базовая аналитика'
     },
     power: {
-      name: 'Энергетический этаж',
-      short: 'Сеть станции, резервные ячейки и аварийные машины.',
+      name: 'Энергоячейка',
+      short: 'Расширяет запас энергии и ускоряет восстановление.',
       effect: '+25 к максимуму энергии и быстрее восстановление за уровень.',
       xradar: 'Надёжная инфраструктура'
     },
     workshop: {
-      name: 'Мастерская и склад',
-      short: 'Инструменты, найденные детали и защищённое хранилище.',
+      name: 'Фабрика чипов',
+      short: 'Оптимизирует редкое оборудование и офлайн-хранилище разведданных.',
       effect: 'Расширяет офлайн-склад и удешевляет поздние улучшения.',
       xradar: 'Защита позиции и управление инструментами'
     },
     comms: {
-      name: 'Коммуникационный центр',
-      short: 'Магистраль с низкой задержкой для всех систем станции.',
+      name: 'Рыночный поток',
+      short: 'Низколатентная магистраль для живых рыночных данных.',
       effect: 'Сокращает время строительства на 4% за уровень, максимум на 40%.',
       xradar: 'Живой поток рыночных данных'
     },
     automation: {
-      name: 'Серверная автоматизации',
+      name: 'Автосканер',
       short: 'Автономное наблюдение за рынком, пока оператора нет.',
       effect: '+15% к офлайн-добыче данных за уровень.',
       xradar: 'Автоматизация наблюдений'
     },
     antenna: {
-      name: 'Антенная комната',
+      name: 'Трекер китов',
       short: 'Принимает более крупные партии внешних наблюдений.',
       effect: 'Добавляет сигналы в каждую разведывательную волну.',
       xradar: 'Лента новых токенов'
     },
     analysis: {
-      name: 'Аналитический центр',
+      name: 'Декодер риска',
       short: 'Раскрывает уровень риска, право эмиссии и концентрацию держателей.',
       effect: 'Новые улики открываются на уровнях 3, 6 и 9.',
       xradar: 'Скоринг безопасности'
     },
     interceptor: {
-      name: 'Узел перехвата',
+      name: 'Альфа-перехватчик',
       short: 'Отслеживает согласованную активность крупных кошельков.',
       effect: 'Показывает умные кошельки и открывает редкие находки компонентов.',
       xradar: 'Лидерборд умных кошельков'
@@ -341,39 +341,39 @@ const ru = {
   },
 
   achievements: {
-    level_five_room: { title: 'Глубокая специализация', description: 'Поднимите любое помещение до 5 уровня.' },
-    full_station: { title: 'Станция достроена', description: 'Откройте все восемь помещений станции.' },
+    level_five_room: { title: 'Глубокая специализация', description: 'Подними любой модуль разведки до 5 уровня.' },
+    full_station: { title: 'Полный аналитический стек', description: 'Открой все восемь модулей сети.' },
     veteran_operator: { title: 'Ветеран-оператор', description: 'Достигните 10 уровня оператора.' }
   },
 
   incidents: {
     security_breach: {
-      title: 'Взлом периметра',
-      description: 'Неизвестное устройство прощупывает сеть станции, а поверхностный замок сообщает о взломе.',
+      title: 'Атака кластера кошельков',
+      description: 'Координированный кластер кошельков проверяет активы с низкой ликвидностью.',
       outcomes: {
-        lockdown: { label: 'Заблокировать лифт', message: 'Лифт запечатан. Группа проникновения отступила.' },
-        isolate: { label: 'Изолировать сеть сигналов', message: 'Сеть сигналов изолирована. Враждебный зонд локализован.' }
+        lockdown: { label: 'Заморозить уязвимые маршруты', message: 'Уязвимые маршруты заморожены. Кластер потерял доступ.' },
+        isolate: { label: 'Изолировать кластер', message: 'Координированный кластер изолирован и локализован.' }
       }
     },
     coolant_leak: {
-      title: 'Утечка хладагента',
-      description: 'Треснувшая магистраль хладагента перегревает стойки автоматизации.',
+      title: 'Отток ликвидности',
+      description: 'Глубина ликвидности резко падает у группы связанных активов.',
       outcomes: {
-        vent: { label: 'Продуть серверную', message: 'Давление сброшено. Стойки стабильны.' },
-        seal: { label: 'Заварить и собрать хладагент', message: 'Трещина заварена, часть материала удалось вернуть.' }
+        vent: { label: 'Исключить тонкие пулы', message: 'Тонкие пулы удалены из активного наблюдения.' },
+        seal: { label: 'Развернуть фильтр ликвидности', message: 'Фильтр остановил отток и сохранил полезные данные.' }
       }
     },
     power_surge: {
-      title: 'Перегрузка сети',
-      description: 'Скачок с поверхности каскадом идёт по нижней сети станции.',
+      title: 'Всплеск волатильности',
+      description: 'Резкий скачок объёма искажает краткосрочное поведение рынка.',
       outcomes: {
-        reroute: { label: 'Пустить через резервные ячейки', message: 'Скачок погашен резервными ячейками.' },
-        shutdown: { label: 'Отключить некритичные системы', message: 'Некритичные системы обесточены, сеть восстановилась.' }
+        reroute: { label: 'Направить в глубокую ликвидность', message: 'Всплеск поглощён более глубокими пулами.' },
+        shutdown: { label: 'Приостановить нестабильные потоки', message: 'Нестабильные потоки остановлены, модель восстановилась.' }
       }
     },
     signal_spoof: {
       title: 'Подделка рыночного сигнала',
-      description: 'Поддельный поток пытается отравить аналитические модели станции.',
+      description: 'Поддельный поток пытается отравить аналитические модели сети.',
       outcomes: {
         trace: { label: 'Отследить враждебный ретранслятор', message: 'Ретранслятор отслежен, его кэш данных изъят.' },
         purge: { label: 'Вычистить заражённый поток', message: 'Поддельный поток удалён до того, как дошёл до анализа.' }
@@ -496,9 +496,9 @@ const ru = {
   },
 
   build: {
-    upgrade: 'Улучшить помещение',
-    open: 'Открыть новый этаж',
-    floorOpened: room => `${room}: этаж открыт`,
+    upgrade: 'Улучшить модуль',
+    open: 'Открыть новый модуль',
+    floorOpened: room => `${room}: модуль активирован`,
     upgradeComplete: room => `${room}: улучшение готово`,
     opening: room => `Открывается: ${room}`,
     upgrading: room => `Улучшается: ${room}`
@@ -522,8 +522,8 @@ const ru = {
 
   misc: {
     operationComplete: 'Работа завершена',
-    stationUpdated: 'Системы станции обновлены',
-    incidentContained: 'Инцидент безопасности локализован'
+    stationUpdated: 'Аналитическая сеть обновлена',
+    incidentContained: 'Рыночное событие обработано'
   }
 };
 

@@ -1,14 +1,18 @@
 import express from 'express';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { PlayerStore } from './playerStore.js';
 import {
   acknowledgeReturn,
+  claimDailyCipher,
+  claimDailyCombo,
   equipItem,
   importExternalSignals,
   moveHero,
   publicGameState,
+  performScan,
   resolveIncident,
   resolveExternalSignal,
   resolveSignal,
@@ -48,6 +52,7 @@ export function getConfig(env = process.env) {
 export function createApp({ store, config = getConfig() }) {
   if (!config.sessionSecret) throw new Error('SESSION_SECRET is required in production.');
   const app = express();
+  const indexTemplate = readFileSync(path.join(dirname, 'public', 'index.html'), 'utf8');
   const xradar = new XRadarClient({ baseUrl: config.xradarBaseUrl, apiKey: config.xradarGameApiKey });
   app.disable('x-powered-by');
   app.use(express.json({ limit: '16kb' }));
@@ -90,7 +95,7 @@ export function createApp({ store, config = getConfig() }) {
     }
     const xradarStatus = await xradar.health();
     const ok = database === 'ok';
-    res.status(ok ? 200 : 503).json({ ok, database, xradar: xradarStatus, game: 'v1.0-schema5-xradar-lab' });
+    res.status(ok ? 200 : 503).json({ ok, database, xradar: xradarStatus, game: 'v5.0-schema5-intelligence-game' });
   }));
 
   app.get('/api/config', (_req, res) => {
@@ -105,7 +110,7 @@ export function createApp({ store, config = getConfig() }) {
 
   app.get('/tonconnect-manifest.json', (req, res) => {
     const origin = `${req.protocol}://${req.get('host')}`;
-    res.json({ url: origin, name: 'XRadar Lab', iconUrl: `${origin}/assets/command-lab-concept.png` });
+    res.json({ url: origin, name: 'XRadar: Signal Empire', iconUrl: `${origin}/assets/xradar-mark.png` });
   });
 
   app.post('/api/auth/telegram', asyncRoute(async (req, res) => {
@@ -236,6 +241,33 @@ export function createApp({ store, config = getConfig() }) {
     res.json({ ok: true, path: action.path, game: publicGameState(player, now) });
   }));
 
+  app.post('/api/game/scan', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const now = new Date();
+    let result;
+    const player = await store.mutate(req.session.telegramId, current => {
+      result = performScan(current, req.body?.taps, now);
+    }, now);
+    res.json({ ok: true, result, game: publicGameState(player, now) });
+  }));
+
+  app.post('/api/game/daily/combo', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const now = new Date();
+    let result;
+    const player = await store.mutate(req.session.telegramId, current => {
+      result = claimDailyCombo(current, req.body?.moduleIds, now);
+    }, now);
+    res.json({ ok: true, result, game: publicGameState(player, now) });
+  }));
+
+  app.post('/api/game/daily/cipher', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const now = new Date();
+    let result;
+    const player = await store.mutate(req.session.telegramId, current => {
+      result = claimDailyCipher(current, req.body?.code, now);
+    }, now);
+    res.json({ ok: true, result, game: publicGameState(player, now) });
+  }));
+
   app.post('/api/game/build', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
     const now = new Date();
     let construction;
@@ -264,8 +296,8 @@ export function createApp({ store, config = getConfig() }) {
     let result;
     const player = await store.mutate(req.session.telegramId, current => {
       result = external
-        ? resolveExternalSignal(current, req.body?.signalId, req.body?.decision, external, now)
-        : resolveSignal(current, req.body?.signalId, req.body?.decision, now);
+        ? resolveExternalSignal(current, req.body?.signalId, req.body?.decision, external, now, req.body?.factors)
+        : resolveSignal(current, req.body?.signalId, req.body?.decision, now, req.body?.factors);
     }, now);
     res.json({ ok: true, result, game: publicGameState(player, now) });
   }));
@@ -367,6 +399,12 @@ export function createApp({ store, config = getConfig() }) {
     }));
   }
 
+  app.get('/', (req, res) => {
+    const origin = `${req.protocol}://${req.get('host')}`;
+    res.setHeader('Cache-Control', 'no-store');
+    res.type('html').send(indexTemplate.replaceAll('{{ORIGIN}}', origin));
+  });
+
   app.use(express.static(path.join(dirname, 'public'), {
     etag: true,
     maxAge: config.nodeEnv === 'production' ? '1h' : 0,
@@ -381,7 +419,7 @@ export function createApp({ store, config = getConfig() }) {
     res.status(status).json({
       ok: false,
       error: error.code || 'INTERNAL_ERROR',
-      message: status >= 500 ? 'The station is temporarily unavailable.' : error.message
+      message: status >= 500 ? 'The XRadar network is temporarily unavailable.' : error.message
     });
   });
   return app;

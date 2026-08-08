@@ -1,6 +1,6 @@
 {
   "name": "xradar-lab-mini-app",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,12 +10,17 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "demo": "node scripts/demo-with-mongo.js",
+    "preview:live": "node scripts/preview-live.js",
     "simulate:onboarding": "node scripts/simulate-first-5-minutes.js",
     "simulate:30m": "node scripts/simulate-30-minutes.js",
+    "simulate:taps": "node scripts/simulate-tap-session.js",
+    "load:smoke": "node scripts/load-smoke.js",
+    "launch:links": "node scripts/create-launch-links.js",
     "test": "node --test"
   },
   "dependencies": {
     "@ton/core": "^0.63.1",
+    "compression": "^1.8.1",
     "express": "^5.1.0",
     "mongodb": "^6.19.0"
   },

@@ -1,18 +1,23 @@
 import express from 'express';
+import compression from 'compression';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { PlayerStore } from './playerStore.js';
 import {
+  acknowledgeAchievements,
   acknowledgeReturn,
   claimDailyCipher,
   claimDailyCombo,
   equipItem,
   importExternalSignals,
   moveHero,
+  openPosition,
+  positionReady,
   publicGameState,
   performScan,
+  settlePosition,
   resolveIncident,
   resolveExternalSignal,
   resolveSignal,
@@ -27,6 +32,7 @@ import { PRODUCT_CATALOG, catalogView, createStarsInvoiceLink, tonPaymentRequest
 import { XRadarClient } from './xradarClient.js';
 import { createSessionToken, validateTelegramInitData, verifySessionToken } from './telegramAuth.js';
 import { FixedWindowRateLimiter, rateLimitMiddleware } from './rateLimiter.js';
+import { miniAppBaseUrl, miniAppLaunchUrl, parseLaunchParameter, sanitizeGrowthSource } from './growth.js';
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -37,12 +43,17 @@ export function getConfig(env = process.env) {
     mongoUri: env.MONGODB_URI || 'mongodb://127.0.0.1:27017',
     mongoDb: env.MONGODB_DB || 'bunker_game',
     botToken: env.TELEGRAM_BOT_TOKEN || '',
+    botUsername: env.TELEGRAM_BOT_USERNAME || '',
+    appShortName: env.TELEGRAM_APP_SHORT_NAME || '',
     sessionSecret: env.SESSION_SECRET || (env.NODE_ENV === 'production' ? '' : 'local-development-secret-change-me'),
     allowDevAuth: env.ALLOW_DEV_AUTH === 'true' && env.NODE_ENV !== 'production',
     timeScale: Math.max(0.001, Number(env.GAME_TIME_SCALE || 1)),
     xradarBaseUrl: env.XRADAR_BASE_URL || '',
     xradarGameApiKey: env.XRADAR_GAME_API_KEY || '',
     telegramWebhookSecret: env.TELEGRAM_WEBHOOK_SECRET || '',
+    enableStarsPayments: env.ENABLE_STARS_PAYMENTS === 'true',
+    enableTonPayments: env.ENABLE_TON_PAYMENTS === 'true',
+    growthAdminKey: env.GROWTH_ADMIN_KEY || '',
     tonWalletAddress: env.TON_WALLET_ADDRESS || '',
     tonApiBaseUrl: env.TON_API_BASE_URL || '',
     tonApiKey: env.TON_API_KEY || ''
@@ -51,10 +62,21 @@ export function getConfig(env = process.env) {
 
 export function createApp({ store, config = getConfig() }) {
   if (!config.sessionSecret) throw new Error('SESSION_SECRET is required in production.');
+  if (config.enableStarsPayments && (!config.botToken || !config.telegramWebhookSecret)) {
+    throw new Error('Telegram Stars require TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET.');
+  }
+  if (config.enableTonPayments && (!config.tonWalletAddress || !config.tonApiBaseUrl)) {
+    throw new Error('TON payments require TON_WALLET_ADDRESS and TON_API_BASE_URL.');
+  }
   const app = express();
   const indexTemplate = readFileSync(path.join(dirname, 'public', 'index.html'), 'utf8');
   const xradar = new XRadarClient({ baseUrl: config.xradarBaseUrl, apiKey: config.xradarGameApiKey });
+  const starsEnabled = Boolean(config.enableStarsPayments && config.botToken && config.telegramWebhookSecret);
+  const tonEnabled = Boolean(config.enableTonPayments && config.tonWalletAddress && config.tonApiBaseUrl);
+  const telegramAppUrl = miniAppBaseUrl({ botUsername: config.botUsername, appShortName: config.appShortName });
   app.disable('x-powered-by');
+  if (config.nodeEnv === 'production') app.set('trust proxy', 1);
+  app.use(compression({ threshold: 1_024 }));
   app.use(express.json({ limit: '16kb' }));
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -85,6 +107,17 @@ export function createApp({ store, config = getConfig() }) {
   });
   const playerLimit = rateLimitMiddleware(new FixedWindowRateLimiter({ max: 30, windowMs: 10_000 }));
   const actionLimit = rateLimitMiddleware(new FixedWindowRateLimiter({ max: 12, windowMs: 10_000 }));
+  const authLimit = rateLimitMiddleware(
+    // Mobile carriers can place many real Telegram users behind one NAT IP.
+    // Keep burst protection high enough for a launch without locking them out.
+    new FixedWindowRateLimiter({ max: 300, windowMs: 60_000 }),
+    req => `auth:${req.ip || req.socket?.remoteAddress || 'unknown'}`
+  );
+  const publicLimit = rateLimitMiddleware(
+    // Launch status is cached, so allow shared mobile NATs to fan in safely.
+    new FixedWindowRateLimiter({ max: 600, windowMs: 60_000 }),
+    req => `public:${req.ip || req.socket?.remoteAddress || 'unknown'}`
+  );
 
   app.get('/health', asyncRoute(async (_req, res) => {
     let database = 'ok';
@@ -95,16 +128,25 @@ export function createApp({ store, config = getConfig() }) {
     }
     const xradarStatus = await xradar.health();
     const ok = database === 'ok';
-    res.status(ok ? 200 : 503).json({ ok, database, xradar: xradarStatus, game: 'v5.0-schema5-intelligence-game' });
+    res.status(ok ? 200 : 503).json({ ok, database, xradar: xradarStatus, game: 'v6.0-schema5-genesis-launch' });
   }));
 
-  app.get('/api/config', (_req, res) => {
+  app.get('/api/launch/status', publicLimit, asyncRoute(async (_req, res) => {
+    res.setHeader('Cache-Control', 'public, max-age=10, stale-while-revalidate=20');
+    res.json({ ok: true, launch: await store.launchStatus() });
+  }));
+
+  app.get('/api/config', (req, res) => {
+    const origin = `${req.protocol}://${req.get('host')}`;
     res.json({
       allowDevAuth: config.allowDevAuth,
       telegramConfigured: Boolean(config.botToken),
+      telegramMiniAppUrl: telegramAppUrl || null,
+      referralSharingConfigured: Boolean(telegramAppUrl),
+      genesisStoryUrl: `${origin}/genesis-story.png`,
       xradarBaseUrl: config.xradarBaseUrl || null,
       liveWaves: xradar.configured,
-      commerce: { stars: Boolean(config.botToken), ton: Boolean(config.tonWalletAddress && config.tonApiBaseUrl) }
+      commerce: { stars: starsEnabled, ton: tonEnabled }
     });
   });
 
@@ -113,30 +155,36 @@ export function createApp({ store, config = getConfig() }) {
     res.json({ url: origin, name: 'XRadar: Signal Empire', iconUrl: `${origin}/assets/xradar-mark.png` });
   });
 
-  app.post('/api/auth/telegram', asyncRoute(async (req, res) => {
+  app.post('/api/auth/telegram', authLimit, asyncRoute(async (req, res) => {
     let user;
     if (req.body?.initData) {
       user = validateTelegramInitData(req.body.initData, config.botToken);
     } else if (config.allowDevAuth && req.body?.dev === true) {
-      user = { id: '900000001', first_name: 'Demo Operator', username: 'local_demo' };
+      const requestedId = String(req.body?.devUserId || '900000001');
+      const id = /^9\d{8,15}$/.test(requestedId) ? requestedId : '900000001';
+      user = { id, first_name: `Demo ${id.slice(-4)}`, username: `local_${id.slice(-8)}` };
     } else {
       const error = new Error('Launching outside Telegram is not allowed.');
       error.status = 401;
       error.code = 'TELEGRAM_REQUIRED';
       throw error;
     }
-    let player = await store.findOrCreateUser(user);
+    const launchParameter = req.body?.startParam || req.body?.referralCode || '';
+    const launch = parseLaunchParameter(launchParameter);
+    const source = sanitizeGrowthSource(req.body?.source || launch.source);
+    let player = await store.findOrCreateUser(user, new Date(), source);
     let referralError = null;
     const deviceHash = hashDeviceId(req.body?.deviceId, config.sessionSecret);
-    if (req.body?.referralCode || deviceHash) {
+    if (launch.referralCode || deviceHash) {
       try {
-        player = await store.registerReferral({ telegramId: player.telegramId, referralCode: req.body?.referralCode, deviceHash });
+        player = await store.registerReferral({ telegramId: player.telegramId, referralCode: launch.referralCode, deviceHash });
       } catch (error) {
         referralError = error.code || 'REFERRAL_REJECTED';
       }
     }
     const token = createSessionToken({ telegramId: player.telegramId }, config.sessionSecret);
     res.setHeader('Set-Cookie', sessionCookie(token, config.nodeEnv === 'production'));
+    await store.recordGrowthEvent(player.telegramId, 'authenticated', source);
     res.json({ ok: true, profile: player.profile, referralError });
   }));
 
@@ -144,6 +192,34 @@ export function createApp({ store, config = getConfig() }) {
     res.setHeader('Set-Cookie', sessionCookie('', config.nodeEnv === 'production', 0));
     res.json({ ok: true });
   });
+
+  app.post('/api/growth/share', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const player = await store.markShared(req.session.telegramId, new Date());
+    const referralUrl = miniAppLaunchUrl(
+      { botUsername: config.botUsername, appShortName: config.appShortName },
+      player.profile?.referralCode
+    );
+    res.json({
+      ok: true,
+      referralUrl: referralUrl || `${req.protocol}://${req.get('host')}?ref=${encodeURIComponent(player.profile?.referralCode || '')}`,
+      game: publicGameState(player)
+    });
+  }));
+
+  app.post('/api/growth/xradar-open', auth, playerLimit, asyncRoute(async (req, res) => {
+    const player = await store.getPlayer(req.session.telegramId);
+    await store.recordGrowthEvent(req.session.telegramId, 'xradar_opened', player?.progression?.growth?.source || 'direct');
+    res.json({ ok: true });
+  }));
+
+  app.get('/api/admin/growth', publicLimit, asyncRoute(async (req, res) => {
+    const supplied = String(req.get('X-Admin-Key') || '').trim();
+    if (!config.growthAdminKey || !safeEqualSecret(supplied, config.growthAdminKey)) {
+      return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ ok: true, growth: await store.growthSummary() });
+  }));
 
   app.post('/api/telegram/webhook', asyncRoute(async (req, res) => {
     if (config.telegramWebhookSecret && req.get('X-Telegram-Bot-Api-Secret-Token') !== config.telegramWebhookSecret) {
@@ -177,7 +253,7 @@ export function createApp({ store, config = getConfig() }) {
   }));
 
   app.get('/api/game/commerce/catalog', auth, playerLimit, (_req, res) => {
-    res.json({ ok: true, products: catalogView({ starsEnabled: Boolean(config.botToken), tonEnabled: Boolean(config.tonWalletAddress && config.tonApiBaseUrl) }) });
+    res.json({ ok: true, products: catalogView({ starsEnabled, tonEnabled }) });
   });
 
   app.post('/api/game/commerce/order', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
@@ -185,6 +261,9 @@ export function createApp({ store, config = getConfig() }) {
     const method = String(req.body?.method || '');
     if (!PRODUCT_CATALOG[productId]) {
       const error = new Error('Unknown product.'); error.code = 'UNKNOWN_PRODUCT'; error.status = 400; throw error;
+    }
+    if ((method === 'stars' && !starsEnabled) || (method === 'ton' && !tonEnabled)) {
+      const error = new Error('This payment method is not enabled.'); error.code = 'PAYMENTS_DISABLED'; error.status = 503; throw error;
     }
     const order = await store.createOrder(req.session.telegramId, productId, method);
     if (req.body?.demo === true && config.allowDevAuth) return res.json({ ok: true, orderId: order.orderId, method, demo: true });
@@ -203,6 +282,7 @@ export function createApp({ store, config = getConfig() }) {
   }));
 
   app.post('/api/game/commerce/ton/verify', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    if (!tonEnabled) return res.status(503).json({ ok: false, error: 'PAYMENTS_DISABLED' });
     const order = await store.getOrder(req.body?.orderId);
     if (!order || order.telegramId !== String(req.session.telegramId) || order.method !== 'ton') return res.status(404).json({ ok: false, error: 'ORDER_NOT_FOUND' });
     const transactionHash = await verifyTonTransaction({
@@ -302,6 +382,43 @@ export function createApp({ store, config = getConfig() }) {
     res.json({ ok: true, result, game: publicGameState(player, now) });
   }));
 
+  app.post('/api/game/achievements/ack', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const now = new Date();
+    const player = await store.mutate(req.session.telegramId, current => {
+      acknowledgeAchievements(current, req.body?.ids, now);
+    }, now);
+    res.json({ ok: true, game: publicGameState(player, now) });
+  }));
+
+  app.post('/api/game/positions/open', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const now = new Date();
+    let position;
+    const player = await store.mutate(req.session.telegramId, current => {
+      position = openPosition(current, req.body?.signalId, req.body?.stake, req.body?.horizon, now, req.body?.factors, config.timeScale || 1);
+    }, now);
+    res.json({ ok: true, position, game: publicGameState(player, now) });
+  }));
+
+  app.post('/api/game/positions/settle', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
+    const now = new Date();
+    const positionId = String(req.body?.positionId || '');
+    const current = await store.getPlayer(req.session.telegramId);
+    const pending = current?.progression?.positions?.open?.find(item => item.id === positionId);
+    if (!pending) return res.status(404).json({ ok: false, error: 'UNKNOWN_POSITION' });
+    // Check the clock before spending a call on the radar.
+    if (!positionReady(pending, now)) return res.status(409).json({ ok: false, error: 'POSITION_NOT_READY' });
+
+    const outcome = pending.source === 'xradar'
+      ? await xradar.outcome(pending.externalId, pending.horizon)
+      : null;
+
+    let result;
+    const player = await store.mutate(req.session.telegramId, state => {
+      result = settlePosition(state, positionId, outcome, now);
+    }, now);
+    res.json({ ok: true, result, game: publicGameState(player, now) });
+  }));
+
   app.post('/api/game/recon/sync-live', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
     const now = new Date();
     const current = await store.getPlayer(req.session.telegramId);
@@ -352,9 +469,11 @@ export function createApp({ store, config = getConfig() }) {
   }));
 
   app.get('/api/game/leaderboard', auth, playerLimit, asyncRoute(async (req, res) => {
-    const entries = await store.leaderboard(Number(req.query.limit || 20));
+    const mode = req.query.mode === 'referrals' ? 'referrals' : 'accuracy';
+    const entries = await store.leaderboard(Number(req.query.limit || 20), new Date(), mode);
     const ownIndex = entries.findIndex(entry => entry.telegramId === String(req.session.telegramId));
-    res.json({ ok: true, entries: entries.map(({ telegramId, ...entry }, index) => ({ ...entry, rank: index + 1, self: telegramId === String(req.session.telegramId) })), ownRank: ownIndex >= 0 ? ownIndex + 1 : null });
+    res.setHeader('Cache-Control', 'private, max-age=10');
+    res.json({ ok: true, mode, entries: entries.map(({ telegramId, ...entry }, index) => ({ ...entry, rank: index + 1, self: telegramId === String(req.session.telegramId) })), ownRank: ownIndex >= 0 ? ownIndex + 1 : null });
   }));
 
   app.post('/api/game/incident/start', auth, playerLimit, actionLimit, asyncRoute(async (req, res) => {
@@ -438,6 +557,12 @@ function hashDeviceId(value, secret) {
   const deviceId = String(value || '').trim();
   if (!deviceId || deviceId.length > 200) return null;
   return crypto.createHmac('sha256', secret).update(deviceId).digest('hex');
+}
+
+function safeEqualSecret(left, right) {
+  const leftBuffer = Buffer.from(String(left || ''));
+  const rightBuffer = Buffer.from(String(right || ''));
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 async function answerPreCheckout(botToken, queryId, ok, errorMessage) {

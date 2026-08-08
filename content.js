@@ -89,10 +89,26 @@ const en = {
     analyst_goggles: { name: 'Analyst Optics', effect: 'Adds a visible analysis aid to the operator.' },
     utility_vest: { name: 'Utility Harness', effect: 'Late upgrades cost fewer Parts.' },
     field_tablet: { name: 'Field Tablet', effect: 'Adds one extra intercepted signal.' },
-    headlamp: { name: 'Industrial Headlamp', effect: 'Work on new levels completes 5% faster.' }
+    headlamp: { name: 'Industrial Headlamp', effect: 'Work on new levels completes 5% faster.' },
+    signal_visor: { name: 'Signal Visor', effect: 'Reads two more evidence factors on every signal.' },
+    quant_deck: { name: 'Quant Deck', effect: 'Every market pulse yields +2 Intel.' },
+    alpha_badge: { name: 'Alpha Badge', effect: '+1 Intel per pulse and one more evidence factor.' }
   },
 
   achievements: {
+    first_contact: { title: 'First contact', description: 'Assess your first market signal.' },
+    signal_hunter: { title: 'Signal hunter', description: 'Assess 25 signals.' },
+    market_reader: { title: 'Market reader', description: 'Assess 100 signals.' },
+    scanner_500: { title: 'Warm scanner', description: 'Send 500 market pulses.' },
+    scanner_5000: { title: 'Deep sweep', description: 'Send 5,000 market pulses.' },
+    first_position: { title: 'Skin in the game', description: 'Close your first position.' },
+    position_veteran: { title: 'Desk operator', description: 'Close 25 positions.' },
+    hot_hand: { title: 'Hot hand', description: 'Win three positions in a row.' },
+    cold_blooded: { title: 'Cold blooded', description: 'Win seven positions in a row.' },
+    in_the_black: { title: 'In the black', description: 'Bank 1,000 Intel of realized profit.' },
+    sharp_eye: { title: 'Sharp eye', description: 'Hold 70% accuracy over at least 20 calls.' },
+    live_operator: { title: 'Live operator', description: 'Call a real token from the XRadar feed.' },
+    week_one: { title: 'Week one', description: 'Reach a seven day streak.' },
     level_five_room: { title: 'Deep specialization', description: 'Upgrade any intelligence module to level 5.' },
     full_station: { title: 'Full intelligence stack', description: 'Unlock all eight network modules.' },
     veteran_operator: { title: 'Veteran operator', description: 'Reach operator level 10.' }
@@ -337,10 +353,26 @@ const ru = {
     analyst_goggles: { name: 'Оптика аналитика', effect: 'Добавляет оператору видимый анализатор.' },
     utility_vest: { name: 'Разгрузочный жилет', effect: 'Поздние улучшения стоят меньше компонентов.' },
     field_tablet: { name: 'Полевой планшет', effect: 'Добавляет один перехваченный сигнал.' },
-    headlamp: { name: 'Промышленный фонарь', effect: 'Работы на новых уровнях идут на 5% быстрее.' }
+    headlamp: { name: 'Промышленный фонарь', effect: 'Работы на новых уровнях идут на 5% быстрее.' },
+    signal_visor: { name: 'Сигнальный визор', effect: 'Открывает на два фактора улик больше в каждом сигнале.' },
+    quant_deck: { name: 'Квант-дек', effect: 'Каждый импульс даёт +2 Интела.' },
+    alpha_badge: { name: 'Знак альфы', effect: '+1 Интел за импульс и ещё один фактор улик.' }
   },
 
   achievements: {
+    first_contact: { title: 'Первый контакт', description: 'Оцени свой первый рыночный сигнал.' },
+    signal_hunter: { title: 'Охотник за сигналами', description: 'Оцени 25 сигналов.' },
+    market_reader: { title: 'Чтец рынка', description: 'Оцени 100 сигналов.' },
+    scanner_500: { title: 'Разогретый сканер', description: 'Отправь 500 импульсов.' },
+    scanner_5000: { title: 'Глубокое сканирование', description: 'Отправь 5000 импульсов.' },
+    first_position: { title: 'Своя шкура', description: 'Закрой первую позицию.' },
+    position_veteran: { title: 'Оператор стола', description: 'Закрой 25 позиций.' },
+    hot_hand: { title: 'Горячая рука', description: 'Выиграй три позиции подряд.' },
+    cold_blooded: { title: 'Хладнокровие', description: 'Выиграй семь позиций подряд.' },
+    in_the_black: { title: 'В плюсе', description: 'Заработай 1000 Интела реализованной прибыли.' },
+    sharp_eye: { title: 'Острый глаз', description: 'Держи точность 70% минимум на 20 оценках.' },
+    live_operator: { title: 'Живой оператор', description: 'Сделай колл по реальному токену из ленты XRadar.' },
+    week_one: { title: 'Первая неделя', description: 'Дойди до серии в семь дней.' },
     level_five_room: { title: 'Глубокая специализация', description: 'Подними любой модуль разведки до 5 уровня.' },
     full_station: { title: 'Полный аналитический стек', description: 'Открой все восемь модулей сети.' },
     veteran_operator: { title: 'Ветеран-оператор', description: 'Достигните 10 уровня оператора.' }

@@ -1,14 +1,28 @@
 import { MongoClient } from 'mongodb';
 import { advancePlayer, createPlayer, ensurePlayerShape, grantCommerceProduct } from './gameEngine.js';
 import { createOrderRecord } from './commerce.js';
+import { activationEligible, ensureGrowthState, GENESIS_EVENT_ID, GENESIS_LIMIT, sanitizeGrowthSource } from './growth.js';
+
+const GROWTH_EVENT_TYPES = new Set(['authenticated', 'activated', 'shared', 'xradar_opened']);
 
 export class PlayerStore {
   constructor({ uri, dbName }) {
-    this.client = new MongoClient(uri, { serverSelectionTimeoutMS: 5_000 });
+    this.client = new MongoClient(uri, {
+      serverSelectionTimeoutMS: 5_000,
+      waitQueueTimeoutMS: 5_000,
+      maxIdleTimeMS: 60_000,
+      maxPoolSize: 50,
+      minPoolSize: 1,
+      retryWrites: true
+    });
     this.dbName = dbName;
     this.players = null;
     this.orders = null;
     this.paymentEvents = null;
+    this.launchCounters = null;
+    this.growthEvents = null;
+    this.launchCache = null;
+    this.leaderboardCache = new Map();
   }
 
   async connect() {
@@ -17,11 +31,24 @@ export class PlayerStore {
     this.players = db.collection('players');
     this.orders = db.collection('commerce_orders');
     this.paymentEvents = db.collection('payment_events');
+    this.launchCounters = db.collection('launch_counters');
+    this.growthEvents = db.collection('growth_events');
     await this.players.createIndex({ telegramId: 1 }, { unique: true });
     await this.players.createIndex({ 'profile.referralCode': 1 }, { unique: true, sparse: true });
     await this.orders.createIndex({ orderId: 1 }, { unique: true });
     await this.orders.createIndex({ telegramId: 1, createdAt: -1 });
     await this.paymentEvents.createIndex({ externalId: 1 }, { unique: true });
+    await this.players.createIndex({ 'progression.growth.activatedAt': 1 });
+    await this.players.createIndex({ 'progression.growth.source': 1, createdAt: -1 });
+    await this.players.createIndex({ 'progression.season.signalPoints': -1, 'progression.season.attempts': -1 });
+    await this.players.createIndex({ 'stats.referralsQualified': -1 });
+    await this.growthEvents.createIndex({ telegramId: 1, at: -1 });
+    await this.growthEvents.createIndex({ type: 1, at: -1 });
+    await this.launchCounters.updateOne(
+      { _id: GENESIS_EVENT_ID },
+      { $setOnInsert: { issued: 0, limit: GENESIS_LIMIT, createdAt: new Date() } },
+      { upsert: true }
+    );
     return this;
   }
 
@@ -34,7 +61,7 @@ export class PlayerStore {
     return true;
   }
 
-  async findOrCreateUser(user, now = new Date()) {
+  async findOrCreateUser(user, now = new Date(), source = 'direct') {
     const telegramId = String(user.id);
     const fresh = createPlayer({
       telegramId,
@@ -44,9 +71,10 @@ export class PlayerStore {
       // the player's own choice owns the field and must not be overwritten by
       // every re-auth.
       language: user.language_code || undefined,
+      source: sanitizeGrowthSource(source),
       now
     });
-    await this.players.updateOne(
+    const created = await this.players.updateOne(
       { telegramId },
       { $setOnInsert: fresh },
       { upsert: true }
@@ -55,6 +83,7 @@ export class PlayerStore {
       'profile.firstName': user.first_name || 'Operator',
       'profile.username': user.username || null
     }});
+    if (created.upsertedCount) this.launchCache = null;
     return this.players.findOne({ telegramId });
   }
 
@@ -81,6 +110,7 @@ export class PlayerStore {
         current
       );
       if (result.modifiedCount === 1) {
+        await this.settleGrowth(current, now);
         await this.settleReferral(current, now);
         return current;
       }
@@ -89,6 +119,124 @@ export class PlayerStore {
     error.status = 409;
     error.code = 'STATE_CONFLICT';
     throw error;
+  }
+
+  async settleGrowth(player, now = new Date()) {
+    const growth = ensureGrowthState(player);
+    if (growth.activatedAt || !activationEligible(player)) return false;
+    const counter = await this.launchCounters.findOneAndUpdate(
+      { _id: GENESIS_EVENT_ID, issued: { $lt: GENESIS_LIMIT } },
+      { $inc: { issued: 1 }, $set: { updatedAt: new Date(now) } },
+      { returnDocument: 'after' }
+    );
+    const genesisNumber = Number(counter?.issued || 0) || null;
+    const activatedAt = new Date(now);
+    const status = genesisNumber ? 'claimed' : 'capacity_reached';
+    const marked = await this.players.updateOne(
+      { _id: player._id, 'progression.growth.activatedAt': null },
+      {
+        $set: {
+          'progression.growth.activatedAt': activatedAt,
+          'progression.growth.genesis.eventId': GENESIS_EVENT_ID,
+          'progression.growth.genesis.number': genesisNumber,
+          'progression.growth.genesis.claimedAt': genesisNumber ? activatedAt : null,
+          'progression.growth.genesis.status': status
+        },
+        $inc: { version: 1 }
+      }
+    );
+    if (!marked.modifiedCount) return false;
+    growth.activatedAt = activatedAt;
+    growth.genesis = {
+      eventId: GENESIS_EVENT_ID,
+      number: genesisNumber,
+      claimedAt: genesisNumber ? activatedAt : null,
+      status
+    };
+    this.launchCache = null;
+    await this.recordGrowthEvent(player.telegramId, 'activated', growth.source, { genesisNumber }, now);
+    return true;
+  }
+
+  async markShared(telegramId, now = new Date()) {
+    const player = await this.getPlayer(telegramId);
+    if (!player) throw storeError('PLAYER_NOT_FOUND', 'Player not found.', 404);
+    const growth = ensureGrowthState(player);
+    const result = await this.players.findOneAndUpdate(
+      { _id: player._id },
+      {
+        $set: { 'progression.growth.sharedAt': new Date(now) },
+        $inc: { 'progression.growth.shareCount': 1, version: 1 }
+      },
+      { returnDocument: 'after' }
+    );
+    this.launchCache = null;
+    await this.recordGrowthEvent(telegramId, 'shared', growth.source, {}, now);
+    return result;
+  }
+
+  async recordGrowthEvent(telegramId, type, source = 'direct', metadata = {}, now = new Date()) {
+    if (!GROWTH_EVENT_TYPES.has(type)) return false;
+    const safeMetadata = {};
+    if (Number.isInteger(metadata.genesisNumber) && metadata.genesisNumber > 0) safeMetadata.genesisNumber = metadata.genesisNumber;
+    await this.growthEvents.insertOne({
+      telegramId: String(telegramId),
+      type,
+      source: sanitizeGrowthSource(source),
+      metadata: safeMetadata,
+      at: new Date(now)
+    });
+    return true;
+  }
+
+  async launchStatus(now = new Date()) {
+    const timestamp = Date.now();
+    if (this.launchCache && timestamp - this.launchCache.cachedAt < 10_000) return this.launchCache.value;
+    const [counter, totalPlayers, activatedPlayers, sharingPlayers] = await Promise.all([
+      this.launchCounters.findOne({ _id: GENESIS_EVENT_ID }),
+      this.players.estimatedDocumentCount(),
+      this.players.countDocuments({ 'progression.growth.activatedAt': { $ne: null } }),
+      this.players.countDocuments({ 'progression.growth.sharedAt': { $ne: null } })
+    ]);
+    const issued = Math.max(0, Number(counter?.issued || 0));
+    const value = {
+      eventId: GENESIS_EVENT_ID,
+      limit: GENESIS_LIMIT,
+      genesisIssued: issued,
+      remaining: Math.max(0, GENESIS_LIMIT - issued),
+      totalPlayers,
+      activatedPlayers,
+      sharingPlayers,
+      updatedAt: new Date(now).toISOString()
+    };
+    this.launchCache = { cachedAt: timestamp, value };
+    return value;
+  }
+
+  async growthSummary(now = new Date()) {
+    const since = new Date(new Date(now).getTime() - 24 * 60 * 60 * 1000);
+    const [launch, sources, events] = await Promise.all([
+      this.launchStatus(now),
+      this.players.aggregate([
+        { $group: {
+          _id: { $ifNull: ['$progression.growth.source', 'direct'] },
+          players: { $sum: 1 },
+          activated: { $sum: { $cond: [{ $ne: ['$progression.growth.activatedAt', null] }, 1, 0] } },
+          sharers: { $sum: { $cond: [{ $ne: ['$progression.growth.sharedAt', null] }, 1, 0] } },
+          qualifiedReferrals: { $sum: { $ifNull: ['$stats.referralsQualified', 0] } }
+        } },
+        { $sort: { players: -1 } }
+      ]).toArray(),
+      this.growthEvents.aggregate([
+        { $match: { at: { $gte: since } } },
+        { $group: { _id: '$type', count: { $sum: 1 }, uniquePlayers: { $addToSet: '$telegramId' } } }
+      ]).toArray()
+    ]);
+    return {
+      ...launch,
+      last24h: Object.fromEntries(events.map(event => [event._id, { count: event.count, uniquePlayers: event.uniquePlayers.length }])),
+      sources: sources.map(source => ({ source: source._id, players: source.players, activated: source.activated, sharers: source.sharers, qualifiedReferrals: source.qualifiedReferrals }))
+    };
   }
 
   async createOrder(telegramId, productId, method, now = new Date()) {
@@ -142,6 +290,7 @@ export class PlayerStore {
       : null;
     return this.mutate(telegramId, current => {
       current.profile.referredBy = inviter.telegramId;
+      ensureGrowthState(current).source = 'referral';
       registerDevice(current, deviceHash);
       if (duplicateDevice && !current.profile.riskFlags.includes('shared_device')) current.profile.riskFlags.push('shared_device');
     }, now);
@@ -168,21 +317,50 @@ export class PlayerStore {
     return true;
   }
 
-  async leaderboard(limit = 20, now = new Date()) {
-    const players = await this.players.find({}, { projection: { telegramId: 1, profile: 1, hero: 1, stats: 1, progression: 1 } }).limit(500).toArray();
-    const cutoff = new Date(new Date(now).getTime() - 30 * 24 * 60 * 60 * 1000).getTime();
-    return players.map(player => {
-      const history = (player.stats?.reconHistory || []).filter(entry => new Date(entry.at).getTime() >= cutoff);
-      const correct = history.filter(entry => entry.correct).length;
-      return {
-        telegramId: player.telegramId,
-        name: player.profile?.appearance?.callSign || player.profile?.firstName || 'Operator',
-        level: player.hero?.level || 1,
-        attempts: history.length,
-        accuracy: history.length ? Math.round(correct / history.length * 100) : 0,
-        subscriber: Boolean(player.progression?.commerce?.subscriptionUntil && new Date(player.progression.commerce.subscriptionUntil) > new Date(now))
-      };
-    }).filter(entry => entry.attempts > 0).sort((a, b) => b.accuracy - a.accuracy || b.attempts - a.attempts).slice(0, Math.max(1, Math.min(100, limit)));
+  async leaderboard(limit = 20, now = new Date(), mode = 'accuracy') {
+    const safeLimit = Math.max(1, Math.min(100, Number(limit) || 20));
+    const safeMode = mode === 'referrals' ? 'referrals' : 'accuracy';
+    const cacheKey = `${safeMode}:${safeLimit}`;
+    const cached = this.leaderboardCache.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < 10_000) return cached.entries;
+    const match = safeMode === 'referrals'
+      ? { 'stats.referralsQualified': { $gt: 0 } }
+      : { 'progression.season.attempts': { $gt: 0 } };
+    const sort = safeMode === 'referrals'
+      ? { referrals: -1, signalPoints: -1, attempts: -1 }
+      : { accuracyRaw: -1, attempts: -1, signalPoints: -1 };
+    const rows = await this.players.aggregate([
+      { $match: match },
+      { $project: {
+        telegramId: 1,
+        name: { $ifNull: ['$profile.appearance.callSign', { $ifNull: ['$profile.firstName', 'Operator'] }] },
+        level: { $ifNull: ['$hero.level', 1] },
+        attempts: { $ifNull: ['$progression.season.attempts', 0] },
+        correct: { $ifNull: ['$progression.season.correct', 0] },
+        signalPoints: { $ifNull: ['$progression.season.signalPoints', 0] },
+        referrals: { $ifNull: ['$stats.referralsQualified', 0] },
+        genesisNumber: { $ifNull: ['$progression.growth.genesis.number', null] },
+        subscriptionUntil: '$progression.commerce.subscriptionUntil'
+      } },
+      { $addFields: {
+        accuracyRaw: { $cond: [{ $gt: ['$attempts', 0] }, { $divide: ['$correct', '$attempts'] }, 0] }
+      } },
+      { $sort: sort },
+      { $limit: safeLimit }
+    ]).toArray();
+    const entries = rows.map(row => ({
+      telegramId: row.telegramId,
+      name: row.name,
+      level: row.level,
+      attempts: row.attempts,
+      accuracy: Math.round(Number(row.accuracyRaw || 0) * 100),
+      signalPoints: row.signalPoints,
+      referrals: row.referrals,
+      genesisNumber: row.genesisNumber,
+      subscriber: Boolean(row.subscriptionUntil && new Date(row.subscriptionUntil) > new Date(now))
+    }));
+    this.leaderboardCache.set(cacheKey, { cachedAt: Date.now(), entries });
+    return entries;
   }
 }
 

@@ -122,6 +122,7 @@
             <p data-i18n="signalText">Read the evidence, make a call and build an accuracy streak.</p>
           </div>
           <div id="signalSummary" class="accuracy-strip"></div>
+          <div id="positionPanel"></div>
           <div id="signalList" class="signal-list"></div>
         </section>
 
@@ -146,6 +147,8 @@
             <div class="cipher-input"><input id="cipherInput" type="text" maxlength="5" autocomplete="off" spellcheck="false" placeholder="_ _ _ _ _"><button id="cipherSubmit" type="button" data-i18n="decode">Decode</button></div>
           </article>
           <div id="dailyStats" class="daily-stats"></div>
+          <div id="gearPanel"></div>
+          <div id="achievementPanel"></div>
         </section>
 
         <section id="screen-network" class="screen scroll-screen">
@@ -154,9 +157,13 @@
             <h2 id="profileName">Operator</h2>
             <p data-i18n="networkText">Climb the leagues. Build a verified record. Prepare for the seasonal snapshot.</p>
           </div>
+          <article id="genesisCard" class="genesis-card" aria-live="polite"></article>
           <article id="leagueCard" class="league-card"></article>
+          <article class="ranking-card"><div class="ranking-head"><span><small data-i18n="leaderboardTitle">LIVE LEADERBOARDS</small><h3 data-i18n="intelligenceRank">Intelligence ranking</h3></span><em id="launchActivated">0 active</em></div><div id="accuracyLeaderboard" class="ranking-list"></div></article>
+          <article class="ranking-card"><div class="ranking-head"><span><small data-i18n="genesisGrowth">GENESIS GROWTH</small><h3 data-i18n="recruiterRank">Top recruiters</h3></span></div><div id="referralLeaderboard" class="ranking-list"></div></article>
           <article class="breakdown-card"><div class="card-title"><span class="card-glyph violet">▲</span><div><small data-i18n="estimated">ESTIMATED</small><h3 data-i18n="airdropTitle">Airdrop score</h3></div><b id="scoreTotal">0</b></div><div id="scoreBreakdown" class="score-breakdown"></div></article>
           <article class="referral-card"><div class="card-title"><span class="card-glyph cyan">↗</span><div><small data-i18n="growNetwork">GROW THE NETWORK</small><h3 data-i18n="referralTitle">Qualified referrals</h3></div></div><p data-i18n="referralText">A referral qualifies only after real play and a completed signal assessment.</p><div class="ref-code"><code id="referralCode">XR000</code><button id="shareReferral" type="button" data-i18n="share">Share</button></div><div class="ref-connect"><input id="referralInput" maxlength="20" data-i18n-placeholder="refPlaceholder" placeholder="Referral code"><button id="connectReferral" type="button" data-i18n="connect">Connect</button></div></article>
+          <article class="conversion-card" id="conversionCard" hidden></article>
           <article class="settings-card"><div class="settings-row"><span><small data-i18n="language">LANGUAGE</small><b data-i18n="interfaceLanguage">Interface language</b></span><div class="language-toggle"><button data-language="en" type="button">EN</button><button data-language="ru" type="button">RU</button></div></div><div class="settings-row"><span><small>XRADAR</small><b data-i18n="fullAnalysis">Full market analysis</b></span><button id="openXradar" class="inline-link" type="button" data-i18n="open">Open ↗</button></div></article>
         </section>
       </main>

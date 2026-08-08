@@ -26,9 +26,9 @@ export class FixedWindowRateLimiter {
   }
 }
 
-export function rateLimitMiddleware(limiter) {
+export function rateLimitMiddleware(limiter, keySelector = req => req.session?.telegramId) {
   return (req, res, next) => {
-    const key = req.session?.telegramId;
+    const key = keySelector(req);
     if (!key) return next();
     const result = limiter.consume(key);
     res.setHeader('X-RateLimit-Remaining', String(result.remaining));

@@ -36,6 +36,10 @@ test('commerce grants once and referrals mature only after real play', { timeout
   assert.equal(rewardedInviter.stats.referralsQualified, 1);
 
   const order = await store.createOrder('1002', 'parts_pack', 'stars', now);
+  // Settle any achievement earned by the play above before measuring, so the
+  // assertion below covers the purchase alone and not an unlock landing in the
+  // same window.
+  await store.mutate('1002', () => {}, now);
   const beforePurchase = (await store.getPlayer('1002')).resources.components;
   const first = await store.completeOrder({ orderId: order.orderId, externalId: 'stars-charge-1', now });
   const second = await store.completeOrder({ orderId: order.orderId, externalId: 'stars-charge-1', now });

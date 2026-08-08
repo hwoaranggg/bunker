@@ -1,8 +1,11 @@
 import { copyFor, normalizeLanguage, DEFAULT_LANGUAGE, LANGUAGES } from './content.js';
+import { ensureGrowthState, growthState, publicGrowthState } from './growth.js';
 
 export { LANGUAGES, DEFAULT_LANGUAGE };
 
-export const SCHEMA_VERSION = 5;
+// v6 adds progression.positions. Older saves gain it through ensurePlayerShape,
+// so no data migration is needed — the field simply starts empty.
+export const SCHEMA_VERSION = 6;
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const RECON_INTERVAL_MS = 4 * 60 * 60 * 1000;
 export const INCIDENT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
@@ -51,10 +54,35 @@ const ROOM_FACTORS = Object.freeze({
   automation: 1.25, antenna: 1.35, analysis: 1.55, interceptor: 1.8
 });
 
-export const ACHIEVEMENT_DEFS = Object.freeze({
-  level_five_room: { components: 5 },
-  full_station: { components: 10 },
-  veteran_operator: { components: 15 }
+export const /**
+ * Achievements are the long spine of the game.
+ *
+ * There used to be three, all tied to building modules, and none of them were
+ * ever shown — the engine granted them silently. A ladder that spans the
+ * things a player actually does (scanning, reading signals, running positions,
+ * coming back) gives the session a purpose beyond the current tap.
+ *
+ * `metric` and `target` exist so the client can draw progress rather than a
+ * locked box: a goal you can see yourself approaching is the part that pulls.
+ * `grants` hands out gear, which is what turns a checklist into progression.
+ */
+ACHIEVEMENT_DEFS = Object.freeze({
+  first_contact:     { components: 1,  metric: 'assessments', target: 1 },
+  signal_hunter:     { components: 3,  metric: 'assessments', target: 25 },
+  market_reader:     { components: 8,  metric: 'assessments', target: 100, grants: 'signal_visor' },
+  scanner_500:       { components: 2,  metric: 'taps',        target: 500 },
+  scanner_5000:      { components: 6,  metric: 'taps',        target: 5000, grants: 'quant_deck' },
+  first_position:    { components: 2,  metric: 'positions',   target: 1 },
+  position_veteran:  { components: 6,  metric: 'positions',   target: 25 },
+  hot_hand:          { components: 5,  metric: 'bestStreak',  target: 3 },
+  cold_blooded:      { components: 12, metric: 'bestStreak',  target: 7,   grants: 'alpha_badge' },
+  in_the_black:      { components: 7,  metric: 'realized',    target: 1000 },
+  sharp_eye:         { components: 9,  metric: 'accuracy',    target: 70 },
+  live_operator:     { components: 4,  metric: 'liveCalls',   target: 1 },
+  week_one:          { components: 5,  metric: 'streak',      target: 7 },
+  level_five_room:   { components: 5,  metric: 'topModule',   target: 5 },
+  full_station:      { components: 10, metric: 'modules',     target: 8 },
+  veteran_operator:  { components: 15, metric: 'operator',    target: 10 }
 });
 
 export const INCIDENT_DEFS = Object.freeze({
@@ -90,7 +118,12 @@ export const ITEM_DEFS = Object.freeze({
   analyst_goggles: { slot: 'head', bonus: { analysis: 1 } },
   utility_vest: { slot: 'body', bonus: { componentDiscount: 1 } },
   field_tablet: { slot: 'tool', bonus: { extraSignal: 1 } },
-  headlamp: { slot: 'head', bonus: { workSpeed: 0.05 } }
+  headlamp: { slot: 'head', bonus: { workSpeed: 0.05 } },
+  // Earned gear. `scanPower` feeds the core tap loop on purpose: a reward the
+  // player feels on every tap beats one buried in a menu.
+  signal_visor: { slot: 'head', bonus: { analysis: 2 } },
+  quant_deck: { slot: 'tool', bonus: { scanPower: 2 } },
+  alpha_badge: { slot: 'body', bonus: { scanPower: 1, analysis: 1 } }
 });
 
 // The save keeps the historical room ids for backwards compatibility, while
@@ -124,7 +157,7 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const asMs = value => value instanceof Date ? value.getTime() : new Date(value).getTime();
 const dayKey = value => new Date(value).toISOString().slice(0, 10);
 
-export function createPlayer({ telegramId, firstName = 'Operator', username = null, language = DEFAULT_LANGUAGE, now = new Date() }) {
+export function createPlayer({ telegramId, firstName = 'Operator', username = null, language = DEFAULT_LANGUAGE, source = 'direct', now = new Date() }) {
   const timestamp = new Date(now);
   const player = {
     schemaVersion: SCHEMA_VERSION,
@@ -143,7 +176,10 @@ export function createPlayer({ telegramId, firstName = 'Operator', username = nu
     },
     resources: {
       data: 240,
-      energy: 72,
+      // A new operator starts on a full bar. Handing out a partly drained one
+      // shortens the very first session, which is the one that decides whether
+      // there is a second.
+      energy: 100,
       components: 3,
       lastAccruedAt: timestamp,
       lastEnergyAt: timestamp
@@ -163,8 +199,9 @@ export function createPlayer({ telegramId, firstName = 'Operator', username = nu
       supply: { nextAt: timestamp, claims: 0, lastReward: 0, lastClaimedAt: null },
       streak: { current: 1, best: 1, lastDay: dayKey(timestamp), lastReward: 1 },
       recon: { round: 0, signals: [], nextAt: timestamp, lastResult: null },
+      positions: emptyPositions(),
       inventory: { owned: ['field_coat'], newItem: null },
-      achievements: { earned: [], newAchievement: null },
+      achievements: { earned: [], newAchievement: null, pending: [] },
       daily: { day: dayKey(timestamp), attempts: 0, correct: 0, rewardClaimed: false },
       season: { id: seasonId(timestamp), attempts: 0, correct: 0, signalPoints: 0 },
       signalEmpire: {
@@ -176,12 +213,16 @@ export function createPlayer({ telegramId, firstName = 'Operator', username = nu
       secondaryJob: null,
       conversion: { shown: [], rewarded: [] },
       referrals: { day: dayKey(timestamp), qualifiedToday: 0, total: 0 },
+      growth: growthState(source),
       cooldowns: { terminal: timestamp, generator: timestamp },
       incidents: { active: null, completed: 0, nextAt: timestamp, lastCompleted: null },
       returnReport: null,
       lastCompleted: null
     },
-    stats: { completedJobs: 0, completedRooms: 1, supplyClaims: 0, reconAttempts: 0, reconCorrect: 0, reconHistory: [], referralsQualified: 0 },
+    // totalTaps is lifetime; the Signal Empire scan counter resets every day,
+    // so it cannot carry a long-term goal. liveCalls counts calls made on real
+    // XRadar signals rather than practice ones.
+    stats: { completedJobs: 0, completedRooms: 1, supplyClaims: 0, reconAttempts: 0, reconCorrect: 0, reconHistory: [], referralsQualified: 0, totalTaps: 0, liveCalls: 0 },
     version: 0,
     createdAt: timestamp,
     updatedAt: timestamp
@@ -293,6 +334,10 @@ export function ensurePlayerShape(player, now = new Date()) {
     : timestamp;
   player.progression.streak ||= { current: 1, best: 1, lastDay: dayKey(timestamp), lastReward: 1 };
   player.progression.recon ||= { round: 0, signals: [], nextAt: timestamp, lastResult: null };
+  player.progression.positions ||= emptyPositions();
+  player.progression.positions.open ||= [];
+  player.progression.positions.history ||= [];
+  player.progression.positions.stats ||= emptyPositions().stats;
   player.progression.recon.signals ||= [];
   // Signals saved before the market card existed are backfilled in place:
   // otherwise players mid-shift would open the analysis screen and find it empty.
@@ -304,8 +349,9 @@ export function ensurePlayerShape(player, now = new Date()) {
   player.progression.inventory ||= { owned: ['field_coat'], newItem: null };
   player.progression.inventory.owned ||= ['field_coat'];
   if (!player.progression.inventory.owned.includes('field_coat')) player.progression.inventory.owned.unshift('field_coat');
-  player.progression.achievements ||= { earned: [], newAchievement: null };
+  player.progression.achievements ||= { earned: [], newAchievement: null, pending: [] };
   player.progression.achievements.earned ||= [];
+  player.progression.achievements.pending ||= [];
   player.progression.achievements.newAchievement ??= null;
   player.progression.daily ||= { day: dayKey(timestamp), attempts: 0, correct: 0, rewardClaimed: false };
   player.progression.season ||= { id: seasonId(timestamp), attempts: 0, correct: 0, signalPoints: 0 };
@@ -320,6 +366,7 @@ export function ensurePlayerShape(player, now = new Date()) {
   player.progression.secondaryJob ??= null;
   player.progression.conversion ||= { shown: [], rewarded: [] };
   player.progression.referrals ||= { day: dayKey(timestamp), qualifiedToday: 0, total: 0 };
+  ensureGrowthState(player);
   player.progression.cooldowns ||= { terminal: timestamp, generator: timestamp };
   player.progression.cooldowns.terminal ||= timestamp;
   player.progression.cooldowns.generator ||= timestamp;
@@ -335,6 +382,8 @@ export function ensurePlayerShape(player, now = new Date()) {
   player.stats.completedRooms ??= openRoomCount(player);
   player.stats.supplyClaims ??= 0;
   player.stats.reconAttempts ??= 0;
+  player.stats.totalTaps ??= 0;
+  player.stats.liveCalls ??= 0;
   player.stats.reconCorrect ??= 0;
   player.stats.reconHistory ||= [];
   player.stats.referralsQualified ??= 0;
@@ -607,8 +656,22 @@ export function energyMax(player) {
   return 100 + (player.rooms?.power?.level || 0) * 25;
 }
 
+/**
+ * Energy regeneration, tuned against `scripts/simulate-tap-session.js`.
+ *
+ * The bar is the session length: a full one is roughly a minute of tapping and
+ * four signal milestones. At the old 18/h a drained starter bar needed 5.6
+ * hours to refill and 83 minutes just to afford the next signal, so the first
+ * session ended after fourteen seconds of play and the second one rarely
+ * happened.
+ *
+ * The rate is scaled with capacity (100 + 25 per Power Cell level) so a full
+ * bar always takes about three hours. Upgrading the Power Cell then buys a
+ * longer session rather than a longer wait — the opposite would punish the
+ * player for investing in it.
+ */
 export function energyRegenPerHour(player) {
-  return 18 + (player.rooms?.power?.level || 0) * 8;
+  return 34 + (player.rooms?.power?.level || 0) * 9;
 }
 
 export function openRoomCount(player) {
@@ -693,19 +756,76 @@ function updateCalendarProgress(player, now) {
   }
 }
 
+/**
+ * Current value of every achievement metric.
+ *
+ * Kept in one place so the progress the client draws is the same number the
+ * unlock check uses — a bar that disagrees with the award is worse than no bar.
+ */
+export function achievementMetrics(player) {
+  const positions = player.progression?.positions?.stats || {};
+  const history = player.stats?.reconHistory || [];
+  const attempts = history.length;
+  const correct = history.filter(entry => entry.correct).length;
+  return {
+    assessments: Number(player.stats?.reconAttempts || 0),
+    taps: Number(player.stats?.totalTaps || 0),
+    positions: Number(positions.settled || 0),
+    bestStreak: Number(positions.bestStreak || 0),
+    realized: Math.max(0, Number(positions.realized || 0)),
+    // Accuracy only counts once there is enough of a sample to mean anything.
+    accuracy: attempts >= 20 ? Math.round((correct / attempts) * 100) : 0,
+    liveCalls: Number(player.stats?.liveCalls || 0),
+    streak: Number(player.progression?.streak?.best || 0),
+    topModule: Math.max(0, ...ROOM_ORDER.map(id => player.rooms?.[id]?.level || 0)),
+    modules: openRoomCount(player),
+    operator: Number(player.hero?.level || 1)
+  };
+}
+
+export function achievementProgress(player) {
+  const metrics = achievementMetrics(player);
+  const earned = player.progression.achievements.earned || [];
+  return Object.entries(ACHIEVEMENT_DEFS).map(([id, def]) => {
+    const value = Number(metrics[def.metric] || 0);
+    return {
+      id,
+      components: def.components,
+      grants: def.grants || null,
+      target: def.target,
+      value: Math.min(value, def.target),
+      progress: Math.min(1, def.target > 0 ? value / def.target : 0),
+      earned: earned.includes(id)
+    };
+  });
+}
+
 function checkAchievements(player, now = new Date()) {
   const earned = player.progression.achievements.earned;
-  const checks = {
-    level_five_room: ROOM_ORDER.some(id => (player.rooms[id]?.level || 0) >= 5),
-    full_station: openRoomCount(player) === ROOM_ORDER.length,
-    veteran_operator: (player.hero?.level || 1) >= 10
-  };
-  for (const [id, complete] of Object.entries(checks)) {
-    if (!complete || earned.includes(id)) continue;
+  const metrics = achievementMetrics(player);
+  for (const [id, def] of Object.entries(ACHIEVEMENT_DEFS)) {
+    if (earned.includes(id) || Number(metrics[def.metric] || 0) < def.target) continue;
     earned.push(id);
-    player.resources.components += ACHIEVEMENT_DEFS[id].components;
-    player.progression.achievements.newAchievement = { id, components: ACHIEVEMENT_DEFS[id].components, earnedAt: new Date(now) };
+    player.resources.components += def.components;
+    if (def.grants) grantItem(player, def.grants);
+    const unlock = { id, components: def.components, grants: def.grants || null, earnedAt: new Date(now) };
+    // A single action can complete several goals at once — settling a first
+    // live position finishes three. Holding only the newest threw the rest
+    // away, so they queue and the client shows them one after another.
+    player.progression.achievements.pending.push(unlock);
+    player.progression.achievements.pending = player.progression.achievements.pending.slice(-5);
+    player.progression.achievements.newAchievement = unlock;
   }
+}
+
+/** The client confirms it has shown these, so they are not celebrated twice. */
+export function acknowledgeAchievements(player, ids = [], now = new Date()) {
+  ensurePlayerShape(player, now);
+  const seen = new Set((Array.isArray(ids) ? ids : []).map(String));
+  const pending = player.progression.achievements.pending || [];
+  player.progression.achievements.pending = pending.filter(item => !seen.has(String(item.id)));
+  if (!player.progression.achievements.pending.length) player.progression.achievements.newAchievement = null;
+  return player.progression.achievements.pending;
 }
 
 function completeJob(player, now, slot = 'primary') {
@@ -767,7 +887,9 @@ export function scanPower(player) {
   return 2
     + Math.max(1, Number(player.rooms?.lab?.level || 1))
     + Math.floor(Number(player.rooms?.comms?.level || 0) / 2)
-    + Math.floor(Number(player.rooms?.automation?.level || 0) / 3);
+    + Math.floor(Number(player.rooms?.automation?.level || 0) / 3)
+    // Earned gear pays out on the tap itself, where the player can feel it.
+    + equippedBonus(player, 'scanPower');
 }
 
 export function performScan(player, requestedTaps = 1, now = new Date()) {
@@ -802,10 +924,14 @@ export function performScan(player, requestedTaps = 1, now = new Date()) {
     }
   }
   scan.pointsEarned += points;
+  player.stats.totalTaps += spent;
   player.resources.energy -= spent;
   player.resources.data += reward;
   player.hero.xp += Math.max(1, Math.floor(spent / 5));
   updateHeroLevel(player);
+  // Tap milestones have to land on the tap that earns them; waiting for the
+  // next advance would show the unlock minutes after the player did the work.
+  checkAchievements(player, now);
   return { taps: spent, intel: reward, signalPoints: points, tapPower: scanPower(player), discoveredSignal };
 }
 
@@ -1205,6 +1331,40 @@ export function importExternalSignals(player, wave, now = new Date()) {
   return player.progression.recon.signals;
 }
 
+/**
+ * The reveal: what the anonymous signal actually was.
+ *
+ * This is the whole point of the live wave. Until the player commits, the card
+ * shows metrics only; afterwards XRadar names the token and reports its real
+ * move, which is what makes the terminal worth opening.
+ *
+ * The payload is written to the save and rendered as-is, so it is sanitised
+ * here rather than trusted: lengths are capped, numbers coerced and the mint
+ * checked against the base58 shape before it can reach a link.
+ *
+ * `window` says how the move was measured and must survive to the client —
+ * 'since_issue' is movement after XRadar flagged the token, 'h1' is the plain
+ * hourly change shown when the call was too recent to have an outcome yet.
+ * Claiming the former when we only measured the latter would be a lie.
+ */
+function buildReveal(external = {}) {
+  const text = (value, limit) => String(value ?? '').replace(/[\u0000-\u001f<>&"]/g, '').slice(0, limit);
+  const mint = text(external.mint, 44);
+  return {
+    symbol: text(external.symbol, 16) || 'REVEALED',
+    name: text(external.name, 48),
+    mint: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint) ? mint : '',
+    dex: text(external.dex, 16),
+    phase: text(external.phase, 16),
+    headline: text(external.headline, 32),
+    actualPct: Math.round(Number(external.actualPct || 0) * 10) / 10,
+    window: external.window === 'since_issue' ? 'since_issue' : 'h1',
+    xradarScore: clamp(Math.round(Number(external.xradar || 0)), 0, 100),
+    organicScore: clamp(Math.round(Number(external.organic || 0)), 0, 100),
+    riskScore: clamp(Math.round(Number(external.risk || 0)), 0, 100)
+  };
+}
+
 export function resolveExternalSignal(player, signalId, decision, external, now = new Date(), selectedFactors = []) {
   ensurePlayerShape(player, now);
   requireIdleHero(player);
@@ -1222,6 +1382,7 @@ export function resolveExternalSignal(player, signalId, decision, external, now 
   updateHeroLevel(player);
   player.stats.reconAttempts += 1;
   if (correct) player.stats.reconCorrect += 1;
+  player.stats.liveCalls += 1;
   player.stats.reconHistory.push({ at: new Date(now), correct, risk: signal.riskScore, decision, source: 'xradar' });
   player.stats.reconHistory = player.stats.reconHistory.filter(entry => asMs(entry.at) >= asMs(now) - 60 * DAY_MS).slice(-500);
   player.progression.daily.attempts += 1;
@@ -1247,6 +1408,7 @@ export function resolveExternalSignal(player, signalId, decision, external, now 
     source: 'xradar',
     actualPct: Number(external.actualPct || 0),
     symbol: String(external.symbol || 'REVEALED'),
+    reveal: buildReveal(external),
     explanation: correct ? liveCopy.liveMatch : liveCopy.liveDiffer,
     resolvedAt: new Date(now)
   };
@@ -1256,6 +1418,233 @@ export function resolveExternalSignal(player, signalId, decision, external, now 
   if (!player.progression.recon.signals.length) player.progression.recon.nextAt = new Date(asMs(now) + RECON_INTERVAL_MS);
   player.progression.lastCompleted = { id: `live_signal_${signalId}`, title: liveCopy.liveVerified, reward, at: new Date(now) };
   return result;
+}
+
+/* ─── OPEN POSITIONS ────────────────────────────────────────────────────────
+ *
+ * WHY THIS EXISTS. Judging a signal used to be a solved coin flip: read the
+ * risk score, answer track or ignore, collect a fixed reward. Once a player
+ * learns "risk under 50 is safe" there is no decision left, no cost to being
+ * wrong, and no reason to come back except waiting for Energy.
+ *
+ * A position replaces that with a commitment. The player stakes Intel and picks
+ * how long to hold; the outcome is not a formula in this file but what the
+ * token actually did, measured by the radar's own signal-replay milestones.
+ *
+ * The retention effect matters more than the mechanic: an open position is an
+ * appointment ("resolves in 30 minutes"), which is a far stronger reason to
+ * return than an energy bar quietly refilling. It also rehearses exactly what
+ * the XRadar terminal does, so the funnel stops being a banner and becomes
+ * practice.
+ */
+
+export const POSITION_HORIZONS = Object.freeze({ m5: 5 * 60 * 1000, m30: 30 * 60 * 1000, h1: 60 * 60 * 1000 });
+
+// Holding longer risks more drift, so it pays more. Losses are deliberately not
+// amplified by the horizon — punishing patience would push everyone to m5.
+const HORIZON_MULTIPLIER = Object.freeze({ m5: 1, m30: 1.35, h1: 1.8 });
+const LOSS_DAMPING = 0.8;
+const MIN_STAKE = 50;
+const MAX_OPEN_POSITIONS = 5;
+const MAX_HISTORY = 40;
+
+function emptyPositions() {
+  return { open: [], history: [], stats: { opened: 0, settled: 0, wins: 0, realized: 0, best: null, streak: 0, bestStreak: 0 } };
+}
+
+/** A quarter of the balance keeps a bad call survivable but a good one worth it. */
+export function maxPositionStake(player) {
+  return Math.max(MIN_STAKE, Math.floor(Number(player?.resources?.data || 0) * 0.25));
+}
+
+export function positionPayout(stake, pct, horizon) {
+  const multiplier = HORIZON_MULTIPLIER[horizon] ?? 1;
+  const move = clamp(Number(pct) || 0, -100, 300) / 100;
+  const gain = move >= 0 ? stake * move * multiplier : stake * move * LOSS_DAMPING;
+  const returned = Math.max(0, Math.round(stake + gain));
+  return { returned, profit: returned - stake };
+}
+
+/**
+ * Local signals have no market behind them, so their outcome is derived from
+ * the very metrics the player was shown. Keeping it deterministic is the point:
+ * the lesson learned on practice signals must still hold on live ones.
+ */
+function localOutcomePct(player, position) {
+  const risk = clamp(Number(position.riskAtOpen) || 50, 0, 100);
+  const base = (50 - risk) * 1.2;
+  const jitter = (seededRandom(`position:${player.telegramId}:${position.id}`)() - 0.5) * 30;
+  return Math.round((base + jitter) * 10) / 10;
+}
+
+export function openPosition(player, signalId, stake, horizon, now = new Date(), selectedFactors = [], timeScale = 1) {
+  ensurePlayerShape(player, now);
+  if (!POSITION_HORIZONS[horizon]) throw gameError('INVALID_HORIZON', 'Choose a 5 minute, 30 minute or 1 hour horizon.');
+
+  const positions = player.progression.positions;
+  if (positions.open.length >= MAX_OPEN_POSITIONS) {
+    throw gameError('TOO_MANY_POSITIONS', `Settle an open position first (limit ${MAX_OPEN_POSITIONS}).`);
+  }
+
+  const signal = player.progression.recon.signals.find(item => item.id === signalId);
+  if (!signal) throw gameError('UNKNOWN_SIGNAL', 'This signal is no longer available.');
+
+  const amount = Math.floor(Number(stake) || 0);
+  if (amount < MIN_STAKE) throw gameError('STAKE_TOO_SMALL', `Minimum conviction is ${MIN_STAKE} Intel.`);
+  if (amount > maxPositionStake(player)) throw gameError('STAKE_TOO_LARGE', 'Conviction is capped at a quarter of your Intel.');
+  if (amount > Math.floor(player.resources.data)) throw gameError('NOT_ENOUGH_DATA', 'Not enough Intel for this position.');
+
+  const evidence = assessSignalEvidence(signal, selectedFactors, player.rooms?.analysis?.level || 0);
+  const openedAt = asMs(now);
+  const position = {
+    id: `pos_${positions.stats.opened + 1}_${openedAt}`,
+    signalId,
+    externalId: signal.source === 'xradar' ? String(signal.externalId || '') : '',
+    source: signal.source === 'xradar' ? 'xradar' : 'local',
+    name: signal.name,
+    stake: amount,
+    horizon,
+    openedAt: new Date(openedAt),
+    // Scaled like every other duration in the engine so GAME_TIME_SCALE keeps
+    // the local preview usable; production runs at 1.
+    settlesAt: new Date(openedAt + POSITION_HORIZONS[horizon] * Math.max(0.001, Number(timeScale) || 1)),
+    riskAtOpen: Number(signal.riskScore) || 0,
+    evidence
+  };
+
+  player.resources.data -= amount;
+  positions.open.push(position);
+  positions.stats.opened += 1;
+  // The signal is committed to, so it leaves the queue: it cannot also be
+  // resolved for the instant reward.
+  player.progression.recon.signals = player.progression.recon.signals.filter(item => item.id !== signalId);
+  if (!player.progression.recon.signals.length) player.progression.recon.nextAt = new Date(openedAt + RECON_INTERVAL_MS);
+  return positionView(position, now);
+}
+
+export function positionReady(position, now = new Date()) {
+  return asMs(now) >= asMs(position.settlesAt);
+}
+
+/**
+ * Close a position against a real outcome.
+ *
+ * `outcome` comes from the radar for live signals and is trusted only for the
+ * numbers it reports; whether the position may settle at all is decided here,
+ * from the clock, so a client cannot cash out early.
+ */
+export function settlePosition(player, positionId, outcome = null, now = new Date()) {
+  ensurePlayerShape(player, now);
+  const positions = player.progression.positions;
+  const position = positions.open.find(item => item.id === positionId);
+  if (!position) throw gameError('UNKNOWN_POSITION', 'This position is not open.');
+  if (!positionReady(position, now)) throw gameError('POSITION_NOT_READY', 'This position has not reached its horizon yet.');
+
+  const live = position.source === 'xradar';
+  const reportedPct = outcome && outcome.pct !== null && outcome.pct !== undefined ? Number(outcome.pct) : null;
+  if (live && reportedPct === null) {
+    // No verified movement means no settlement: inventing a number here would
+    // pay the player for something that never happened.
+    throw gameError('OUTCOME_UNAVAILABLE', 'XRadar has not confirmed this outcome yet.', 502);
+  }
+  const pct = live ? reportedPct : localOutcomePct(player, position);
+  const { returned, profit } = positionPayout(position.stake, pct, position.horizon);
+  const correct = profit > 0;
+
+  player.resources.data += returned;
+  const reward = { data: returned, xp: correct ? 24 : 10 };
+  applyReward(player, { xp: reward.xp });
+  updateHeroLevel(player);
+
+  const stats = positions.stats;
+  stats.settled += 1;
+  stats.realized += profit;
+  if (correct) {
+    stats.wins += 1;
+    stats.streak += 1;
+    stats.bestStreak = Math.max(stats.bestStreak, stats.streak);
+  } else {
+    stats.streak = 0;
+  }
+
+  player.stats.reconAttempts += 1;
+  if (correct) player.stats.reconCorrect += 1;
+  if (live) player.stats.liveCalls += 1;
+  player.stats.reconHistory.push({ at: new Date(now), correct, risk: position.riskAtOpen, decision: 'position', source: position.source });
+  player.stats.reconHistory = player.stats.reconHistory.filter(entry => asMs(entry.at) >= asMs(now) - 60 * DAY_MS).slice(-500);
+  player.progression.daily.attempts += 1;
+  player.progression.season.attempts += 1;
+  if (correct) {
+    player.progression.daily.correct += 1;
+    player.progression.season.correct += 1;
+  }
+  reward.signalPoints = grantSignalPoints(player, correct ? 14 : 3);
+
+  const reveal = live ? buildReveal({ ...outcome, actualPct: pct, window: 'since_issue' }) : null;
+  const record = {
+    id: position.id,
+    symbol: reveal?.symbol || position.name,
+    mint: reveal?.mint || '',
+    source: position.source,
+    horizon: position.horizon,
+    stake: position.stake,
+    pct: Math.round(pct * 10) / 10,
+    returned,
+    profit,
+    correct,
+    settledAt: new Date(now),
+    xradarScore: reveal?.xradarScore ?? null,
+    outcomeSource: outcome?.source || 'local'
+  };
+  if (!stats.best || profit > stats.best.profit) {
+    stats.best = { symbol: record.symbol, pct: record.pct, profit, settledAt: record.settledAt };
+  }
+
+  positions.open = positions.open.filter(item => item.id !== positionId);
+  positions.history.unshift(record);
+  positions.history = positions.history.slice(0, MAX_HISTORY);
+
+  const result = {
+    positionId,
+    correct,
+    pct: record.pct,
+    stake: position.stake,
+    returned,
+    profit,
+    horizon: position.horizon,
+    reward,
+    evidence: position.evidence,
+    source: position.source,
+    reveal,
+    status: outcome?.status || null,
+    streak: stats.streak,
+    settledAt: new Date(now)
+  };
+  player.progression.positions.lastResult = result;
+  player.progression.lastCompleted = {
+    id: `position_${positionId}`,
+    title: `${record.symbol} ${record.pct > 0 ? '+' : ''}${record.pct}%`,
+    reward: { data: returned, xp: reward.xp, signalPoints: reward.signalPoints },
+    at: new Date(now)
+  };
+  checkAchievements(player, now);
+  return result;
+}
+
+/** Open positions stay anonymous: naming the token would give away the call. */
+function positionView(position, now = new Date()) {
+  return {
+    id: position.id,
+    name: position.name,
+    stake: position.stake,
+    horizon: position.horizon,
+    openedAt: position.openedAt,
+    settlesAt: position.settlesAt,
+    ready: positionReady(position, now),
+    msRemaining: Math.max(0, asMs(position.settlesAt) - asMs(now)),
+    riskAtOpen: position.riskAtOpen,
+    source: position.source
+  };
 }
 
 /**
@@ -1583,6 +1972,7 @@ export function publicGameState(player, now = new Date()) {
       },
       achievements: {
         ...player.progression.achievements,
+        progress: achievementProgress(player),
         definitions: Object.fromEntries(Object.entries(ACHIEVEMENT_DEFS).map(([id, def]) => [id, { ...def, ...c.achievements[id] }]))
       },
       daily: player.progression.daily,
@@ -1596,9 +1986,24 @@ export function publicGameState(player, now = new Date()) {
         subscriptionUntil: player.progression.commerce.subscriptionUntil,
         entitlements: player.progression.commerce.entitlements
       },
+      positions: {
+        open: player.progression.positions.open.map(position => positionView(position, now)),
+        history: player.progression.positions.history.slice(0, 20),
+        stats: player.progression.positions.stats,
+        lastResult: player.progression.positions.lastResult || null,
+        maxStake: maxPositionStake(player),
+        minStake: MIN_STAKE,
+        maxOpen: MAX_OPEN_POSITIONS,
+        horizons: Object.keys(POSITION_HORIZONS),
+        multipliers: HORIZON_MULTIPLIER
+      },
       secondaryJob,
       conversionTriggers,
+      // The client needs the claimed set, otherwise it cannot tell a reward
+      // that is still available from one already collected.
+      conversionRewarded: player.progression.conversion.rewarded,
       referrals: player.progression.referrals,
+      growth: publicGrowthState(player),
       returnReport: player.progression.returnReport,
       lastCompleted: player.progression.lastCompleted
     },

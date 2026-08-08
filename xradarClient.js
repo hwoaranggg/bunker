@@ -37,6 +37,18 @@ export class XRadarClient {
     return data;
   }
 
+  // What the token actually did over the position's horizon. `pct: null` means
+  // the radar has no confirmed movement yet — never treat that as zero.
+  async outcome(id, horizon) {
+    if (!this.configured) throw xradarError('XRADAR_NOT_CONFIGURED', 'Live XRadar outcomes are not configured.', 503);
+    const data = await this.request(new URL('/api/game/wave/outcome', this.baseUrl), {
+      method: 'POST',
+      body: JSON.stringify({ id, horizon })
+    });
+    if (typeof data.pct !== 'number' && data.pct !== null) throw xradarError('XRADAR_BAD_RESPONSE', 'XRadar returned an invalid outcome.', 502);
+    return data;
+  }
+
   async verifyConversion({ telegramId, event }) {
     if (!this.configured) throw xradarError('XRADAR_NOT_CONFIGURED', 'XRadar conversion verification is not configured.', 503);
     return this.request(new URL('/api/game/conversion/verify', this.baseUrl), {

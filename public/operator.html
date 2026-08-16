@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proof of Alpha — XRadar: Signal Empire</title>
+<meta name="description" content="A verifiable operator record: accuracy, calls made, Signal Points.">
+<meta property="og:type" content="profile">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/assets/xradar-mark.png">
+<style>
+  :root{--panel:rgba(255,255,255,.04);--line:rgba(255,255,255,.09);--brand:#43C6FA;--gold:#ffd479;--text:#f4f3fb;--muted:#8d99a6;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:radial-gradient(120% 80% at 50% 0%,#0d2033,#07101a 60%,#0b0918);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:760px;margin:0 auto;padding:56px 20px 80px}
+  .kicker{font-family:var(--mono);font-size:13px;letter-spacing:.32em;color:var(--brand);text-transform:uppercase;margin:0}
+  h1{margin:14px 0 8px;font-size:clamp(30px,6vw,50px);line-height:1.05}
+  .gen{display:inline-block;padding:5px 12px;border-radius:9px;background:rgba(255,212,121,.14);color:var(--gold);font-family:var(--mono);font-size:14px}
+  .since{margin:14px 0 0;color:var(--muted);font-size:14px;font-family:var(--mono)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:34px 0}
+  .stat{padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}
+  .stat span{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase}
+  .stat b{display:block;margin-top:10px;font-family:var(--mono);font-size:clamp(24px,4vw,34px)}
+  .stat.accent b{color:var(--brand)}
+  .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px}
+  .btn{padding:13px 26px;border-radius:12px;text-decoration:none;font-weight:800;font-size:15px}
+  .btn.primary{background:var(--brand);color:#04121c}
+  .btn.ghost{border:1px solid var(--line);color:var(--text)}
+  .msg{padding:60px 20px;text-align:center;color:var(--muted);font-family:var(--mono)}
+  footer{margin-top:40px;color:var(--muted);font-size:13px}
+  footer a{color:var(--brand)}
+</style>
+</head>
+<body>
+<div class="wrap" id="root"><div class="msg">Loading operator record…</div></div>
+<script>
+const fmt = n => Number(n || 0).toLocaleString('en-US');
+const esc = s => String(s || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+// The Genesis number is the last path segment: /operator/123
+const number = (location.pathname.match(/(\d+)\s*$/) || [])[1];
+
+async function load() {
+  const root = document.getElementById('root');
+  if (!number) { root.innerHTML = '<div class="msg">No operator specified.</div>'; return; }
+  try {
+    const r = await fetch('/api/public/operator/' + encodeURIComponent(number));
+    if (!r.ok) { root.innerHTML = '<div class="msg">Operator #' + esc(number) + ' not found.</div>'; return; }
+    const { operator: o } = await r.json();
+    document.title = o.name + ' · Genesis #' + o.genesisNumber + ' — Proof of Alpha';
+    const share = 'https://x.com/intent/tweet?text=' + encodeURIComponent(
+      o.name + ' — Genesis Operator #' + o.genesisNumber + ': ' + o.accuracy + '% accuracy over ' + o.attempts + ' calls on XRadar.'
+    ) + '&url=' + encodeURIComponent(location.href);
+    root.innerHTML =
+      '<p class="kicker">Proof of Alpha</p>' +
+      '<h1>' + esc(o.name) + '</h1>' +
+      '<span class="gen">GENESIS OPERATOR #' + esc(o.genesisNumber) + '</span>' +
+      '<p class="since">' + fmt(o.correct) + ' correct of ' + fmt(o.attempts) + ' calls · level ' + fmt(o.level) +
+        (o.since ? ' · since ' + new Date(o.since).toISOString().slice(0, 10) : '') + '</p>' +
+      '<div class="grid">' +
+        '<div class="stat accent"><span>Accuracy</span><b>' + Number(o.accuracy).toFixed(1) + '%</b></div>' +
+        '<div class="stat"><span>Calls made</span><b>' + fmt(o.attempts) + '</b></div>' +
+        '<div class="stat"><span>Signal Points</span><b>' + fmt(o.signalPoints) + '</b></div>' +
+        '<div class="stat"><span>Recruits</span><b>' + fmt(o.referrals) + '</b></div>' +
+      '</div>' +
+      '<div class="actions">' +
+        '<a class="btn primary" href="https://t.me/XRadarLab_bot">Build your own record</a>' +
+        '<a class="btn ghost" href="' + share + '" target="_blank" rel="noopener">Share on X</a>' +
+      '</div>' +
+      '<footer><p><a href="/live">← Network leaderboard</a></p></footer>';
+  } catch {
+    root.innerHTML = '<div class="msg">Could not load this record.</div>';
+  }
+}
+load();
+</script>
+</body>
+</html>

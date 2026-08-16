@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XRadar: Signal Empire — Live Network</title>
+<meta name="description" content="Live intelligence network stats: Genesis operators claimed, signals read, network accuracy. Read the market before it moves.">
+<!-- Link unfurl on X / Telegram / Discord pulls the server-rendered card, so the
+     preview always shows current numbers instead of a stale screenshot. -->
+<meta property="og:title" content="XRadar: Signal Empire — Live Network">
+<meta property="og:description" content="Genesis operators, signals read, network accuracy — live.">
+<meta property="og:image" content="/share/card/network.svg">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="XRadar: Signal Empire — Live Network">
+<meta name="twitter:description" content="Genesis operators, signals read, network accuracy — live.">
+<meta name="twitter:image" content="/share/card/network.svg">
+<link rel="icon" href="/assets/xradar-mark.png">
+<style>
+  :root{--bg:#07101a;--panel:rgba(255,255,255,.04);--line:rgba(255,255,255,.09);--brand:#43C6FA;--gold:#ffd479;--text:#f4f3fb;--muted:#8d99a6;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:radial-gradient(120% 80% at 50% 0%,#0d2033,#07101a 60%,#0b0918);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:48px 20px 80px}
+  header{text-align:center;margin-bottom:44px}
+  .kicker{font-family:var(--mono);font-size:13px;letter-spacing:.32em;color:var(--brand);text-transform:uppercase}
+  h1{margin:14px 0 10px;font-size:clamp(32px,6vw,56px);line-height:1.05;letter-spacing:-.02em}
+  h1 span{color:var(--brand)}
+  .sub{margin:0;color:var(--muted);font-size:clamp(15px,2vw,18px)}
+  .cta{display:inline-block;margin-top:26px;padding:14px 30px;border-radius:12px;background:var(--brand);color:#04121c;font-weight:800;text-decoration:none;font-size:16px}
+  .cta:hover{filter:brightness(1.08)}
+  /* Genesis scarcity is the strongest hook on the page, so it gets its own panel. */
+  .genesis{margin:0 0 34px;padding:26px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(135deg,rgba(255,212,121,.10),var(--panel))}
+  .genesis-top{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between}
+  .genesis-top b{font-family:var(--mono);font-size:15px;letter-spacing:.16em;color:var(--gold);text-transform:uppercase}
+  .genesis-top em{font-style:normal;font-family:var(--mono);font-size:15px;color:var(--muted)}
+  .bar{margin-top:16px;height:12px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--brand));transition:width .6s ease}
+  .genesis-num{margin-top:14px;font-family:var(--mono);font-size:clamp(26px,4vw,38px);font-weight:700}
+  .genesis-num small{color:var(--muted);font-size:.55em;font-weight:400}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:38px}
+  .stat{padding:20px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}
+  .stat span{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase}
+  .stat b{display:block;margin-top:10px;font-family:var(--mono);font-size:clamp(24px,3.4vw,34px);font-weight:700}
+  .stat.accent b{color:var(--brand)}
+  h2{margin:0 0 16px;font-size:22px}
+  .tabs{display:flex;gap:8px;margin-bottom:16px}
+  .tabs button{padding:9px 16px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--muted);font-family:var(--mono);font-size:13px;cursor:pointer}
+  .tabs button[aria-selected=true]{border-color:var(--brand);color:var(--brand);background:rgba(67,198,250,.10)}
+  table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  th,td{padding:13px 14px;text-align:left;font-size:14px;border-bottom:1px solid var(--line)}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;background:rgba(255,255,255,.03)}
+  tbody tr:last-child td{border-bottom:none}
+  td.rank{font-family:var(--mono);color:var(--muted);width:56px}
+  td.num{font-family:var(--mono);text-align:right}
+  .gen{display:inline-block;margin-left:8px;padding:2px 7px;border-radius:6px;background:rgba(255,212,121,.14);color:var(--gold);font-family:var(--mono);font-size:11px}
+  a.op{color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
+  a.op:hover{color:var(--brand);border-bottom-color:var(--brand)}
+  footer{margin-top:44px;text-align:center;color:var(--muted);font-size:13px}
+  footer a{color:var(--brand)}
+  .upd{margin-top:10px;font-family:var(--mono);font-size:11px;color:#5d6875}
+  .msg{padding:26px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="kicker">XRadar · Signal Empire</p>
+    <h1>Read the market <span>before it moves</span></h1>
+    <p class="sub">A live intelligence network. Scan signals, call the outcome, build a verifiable record.</p>
+    <a class="cta" id="play" href="https://t.me/XRadarLab_bot">Open the game</a>
+  </header>
+
+  <section class="genesis" id="genesis" hidden>
+    <div class="genesis-top"><b>Genesis Operators</b><em id="genesisLeft"></em></div>
+    <div class="bar"><i id="genesisBar" style="width:0"></i></div>
+    <p class="genesis-num" id="genesisNum"></p>
+  </section>
+
+  <div class="grid" id="stats"></div>
+
+  <h2>Network leaderboard</h2>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-mode="accuracy" aria-selected="true">Accuracy</button>
+    <button role="tab" data-mode="referrals" aria-selected="false">Recruiters</button>
+  </div>
+  <table>
+    <thead><tr><th>#</th><th>Operator</th><th style="text-align:right">Accuracy</th><th style="text-align:right">Calls</th><th style="text-align:right">SP</th></tr></thead>
+    <tbody id="board"><tr><td colspan="5"><div class="msg">Loading…</div></td></tr></tbody>
+  </table>
+  <p class="upd" id="updated"></p>
+
+  <footer>
+    <p><a href="https://t.me/XRadarLab_bot">t.me/XRadarLab_bot</a></p>
+  </footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n || 0).toLocaleString('en-US');
+let mode = 'accuracy';
+
+async function loadStats() {
+  try {
+    const r = await fetch('/api/public/stats');
+    const d = await r.json();
+    if (!d.ok) return;
+    const L = d.launch || {}, S = d.stats || {};
+    const issued = Number(L.genesisIssued || 0), limit = Number(L.limit || 1000);
+    if (limit > 0) {
+      $('genesis').hidden = false;
+      $('genesisBar').style.width = Math.min(100, (issued / limit) * 100) + '%';
+      $('genesisNum').innerHTML = fmt(issued) + ' <small>/ ' + fmt(limit) + ' claimed</small>';
+      $('genesisLeft').textContent = fmt(Math.max(0, Number(L.remaining || 0))) + ' places left';
+    }
+    $('stats').innerHTML = [
+      ['Operators', fmt(L.totalPlayers), false],
+      ['Signals read', fmt(S.signalsRead), false],
+      ['Network accuracy', Number(S.networkAccuracy || 0).toFixed(1) + '%', true],
+      ['Positions settled', fmt(S.positionsSettled), false],
+      ['Wallets connected', fmt(S.walletsConnected), false],
+      ['Signal Points', fmt(S.signalPoints), false]
+    ].map(([label, value, accent]) =>
+      '<div class="stat' + (accent ? ' accent' : '') + '"><span>' + label + '</span><b>' + value + '</b></div>'
+    ).join('');
+    if (S.updatedAt) $('updated').textContent = 'Updated ' + new Date(S.updatedAt).toUTCString();
+  } catch {}
+}
+
+async function loadBoard() {
+  const body = $('board');
+  try {
+    const r = await fetch('/api/public/leaderboard?mode=' + mode + '&limit=50');
+    const d = await r.json();
+    const rows = (d.entries || []);
+    if (!rows.length) { body.innerHTML = '<tr><td colspan="5"><div class="msg">No ranked operators yet.</div></td></tr>'; return; }
+    body.innerHTML = rows.map((e, i) => {
+      const acc = Number(e.attempts || 0) > 0 ? ((Number(e.correct || 0) / Number(e.attempts)) * 100).toFixed(1) + '%' : '—';
+      const name = String(e.name || 'Operator').replace(/[<>&]/g, '');
+      // A Genesis number is a public profile URL, which makes every top operator
+      // its own shareable page.
+      const label = e.genesisNumber
+        ? '<a class="op" href="/operator/' + e.genesisNumber + '">' + name + '</a><span class="gen">#' + e.genesisNumber + '</span>'
+        : name;
+      return '<tr><td class="rank">' + (i + 1) + '</td><td>' + label + '</td><td class="num">' + acc +
+        '</td><td class="num">' + fmt(e.attempts) + '</td><td class="num">' + fmt(e.signalPoints) + '</td></tr>';
+    }).join('');
+  } catch {
+    body.innerHTML = '<tr><td colspan="5"><div class="msg">Could not load the leaderboard.</div></td></tr>';
+  }
+}
+
+document.querySelectorAll('.tabs button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b === btn)));
+  mode = btn.dataset.mode;
+  loadBoard();
+}));
+
+loadStats(); loadBoard();
+setInterval(() => { loadStats(); loadBoard(); }, 60000);
+</script>
+</body>
+</html>
